@@ -12,8 +12,8 @@
 | Data and model | held-out test set used | Yes | Not Started | TBD | |
 | Data and model | at least 3 meaningfully different model configurations | Yes | Completed | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) | Five controlled MobileNetV2 configurations executed. |
 | Data and model | at least 3 appropriate evaluation metrics per model | Yes | Completed | [reports/model_comparison.md](reports/model_comparison.md) | Train/validation/test accuracy and loss logged per run. |
-| Data and model | reasonable model performance | Yes | Not Started | TBD | |
-| Data and model | best model selected and justified | Yes | Not Started | TBD | |
+| Data and model | reasonable model performance | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | EfficientNetB0 reached 0.5405 validation accuracy and 0.5440 test accuracy in the final matched-resolution comparison. |
+| Data and model | best model selected and justified | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | EfficientNetB0 was selected after a three-way comparison against MobileNetV2 32x32 and a MobileNetV2 96x96 resolution-control run. |
 | Data and model | controlled cross-architecture screening before architecture tuning | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | Phase 5A adds a matched-resolution MobileNetV2 control, a final EfficientNetB0 comparison run, and deterministic architecture-selection logic. |
 | MLflow | MLflow integrated into training workflow | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Local MLflow tracking added for the corrected baseline. |
 | MLflow | every run logs all hyperparameters | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Hyperparameters, data config, and baseline settings are logged. |

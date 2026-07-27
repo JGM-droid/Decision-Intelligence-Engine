@@ -21,6 +21,13 @@ The system has two tightly coupled layers:
 - Predictive layer: image preprocessing + CNN inference for class probabilities.
 - Interaction layer: user input handling + LLM explanation generation using model outputs and confidence context.
 
+Current selected predictive model after Phase 5A:
+
+- EfficientNetB0 with ImageNet weights
+- frozen backbone
+- effective model input resolution 96x96
+- selected after comparison against MobileNetV2 32x32 and MobileNetV2 96x96
+
 The architecture is intentionally modular so model training, experiment tracking, inference, and user interface can evolve independently.
 
 ## User Workflow
@@ -99,8 +106,8 @@ Raw CIFAR-10 -> Preprocessing Pipeline -> CNN Training -> Evaluation -> MLflow -
 
 1. Accept user-uploaded image.
 2. Validate file type, dimensions, and decode success.
-3. Apply deterministic inference transforms.
-4. Run best-model inference.
+3. Apply deterministic inference transforms, including architecture-compatible resizing and preprocessing.
+4. Run the selected EfficientNetB0 inference path.
 5. Build explanation payload (class name, confidence, alternatives).
 6. Generate LLM explanation and return structured response.
 
@@ -115,8 +122,8 @@ Raw CIFAR-10 -> Preprocessing Pipeline -> CNN Training -> Evaluation -> MLflow -
 
 ## Inference Workflow
 
-1. Load selected best model artifact from local model artifact path.
-2. Preprocess incoming image with training-compatible normalization.
+1. Load the selected EfficientNetB0 model artifact from the finalized local model artifact path.
+2. Preprocess incoming image with training-compatible resizing and EfficientNetB0-compatible scaling.
 3. Compute class probabilities and top-k predictions.
 4. Apply confidence guardrails:
    - low confidence -> uncertainty-aware response
