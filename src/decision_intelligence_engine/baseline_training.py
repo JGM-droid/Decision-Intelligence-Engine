@@ -1,4 +1,4 @@
-"""Phase 3B baseline transfer-learning workflow (MobileNetV2 frozen backbone)."""
+"""MobileNetV2 training workflow for baseline and controlled experiments."""
 
 from __future__ import annotations
 
@@ -22,12 +22,12 @@ import tensorflow as tf
 from .data_pipeline import build_cifar10_datasets
 from .mlflow_config import load_mlflow_config
 from .mlflow_tracking import flatten_metrics, flatten_params
-from .pipeline_config import load_data_pipeline_config
+from .pipeline_config import DataPipelineConfig, load_data_pipeline_config
 
 
 @dataclass(frozen=True)
 class BaselineTrainingConfig:
-    """Hyperparameters and artifact locations for baseline training."""
+    """Legacy baseline config retained for backward compatibility."""
 
     model_name: str = "mobilenetv2_frozen_baseline"
     num_classes: int = 10
@@ -55,8 +55,47 @@ class BaselineTrainingConfig:
             raise ValueError("epochs must be > 0.")
 
 
+@dataclass(frozen=True)
+class MobileNetRunConfig:
+    """Effective run configuration for a single MobileNetV2 experiment."""
+
+    order: int
+    experiment_id: str
+    experiment_name: str
+    experiment_category: str
+    is_control: bool
+    changed_variable: str
+    control_value: str
+    new_value: str
+    rationale: str
+    model_family: str
+    backbone: str
+    pretrained_weights: str
+    num_classes: int
+    freeze_backbone: bool
+    unfreeze_last_n_layers: int | None
+    unfreeze_last_fraction: float | None
+    train_batch_norm: bool
+    batch_size: int
+    epochs: int
+    steps_per_epoch: int | None
+    validation_steps: int | None
+    evaluate_train_steps: int | None
+    evaluate_val_steps: int | None
+    evaluate_test_steps: int | None
+    report_test_steps: int | None
+    learning_rate: float
+    dropout_rate: float
+    optimizer: str
+    loss: str
+    random_seed: int
+    augmentation_enabled: bool
+    data_split_strategy: str
+    mlflow_tags: dict[str, str]
+
+
 def load_baseline_training_config(project_root: Path, path: Path | None = None) -> BaselineTrainingConfig:
-    """Load baseline training config from JSON."""
+    """Load legacy baseline training config from JSON."""
 
     cfg_path = path or (project_root / "configs" / "baseline_training.json")
     if not cfg_path.exists():
@@ -69,37 +108,77 @@ def _set_reproducibility(seed: int) -> None:
     tf.keras.utils.set_random_seed(seed)
 
 
-def build_mobilenetv2_frozen_model(input_shape: tuple[int, int, int], num_classes: int, dropout_rate: float) -> tf.keras.Model:
-    """Create MobileNetV2 baseline with frozen ImageNet backbone."""
+def _create_run_name(prefix: str, experiment_id: str, timestamp: str) -> str:
+    return f"{prefix}_{experiment_id}_{timestamp}"
 
-    backbone = tf.keras.applications.MobileNetV2(
+
+def _build_mobilenetv2_backbone(input_shape: tuple[int, int, int], pretrained_weights: str) -> tf.keras.Model:
+    return tf.keras.applications.MobileNetV2(
         include_top=False,
-        weights="imagenet",
+        weights=pretrained_weights,
         input_shape=input_shape,
     )
-    backbone.trainable = False
+
+
+def _apply_backbone_trainability(
+    backbone: tf.keras.Model,
+    freeze_backbone: bool,
+    unfreeze_last_n_layers: int | None,
+    unfreeze_last_fraction: float | None,
+    train_batch_norm: bool,
+) -> tuple[int, int]:
+    for layer in backbone.layers:
+        layer.trainable = False
+
+    if not freeze_backbone:
+        total_layers = len(backbone.layers)
+        if unfreeze_last_n_layers is not None and unfreeze_last_n_layers > 0:
+            n_layers = min(unfreeze_last_n_layers, total_layers)
+        elif unfreeze_last_fraction is not None and unfreeze_last_fraction > 0:
+            n_layers = max(1, int(round(total_layers * unfreeze_last_fraction)))
+        else:
+            raise ValueError("Unfrozen runs must define unfreeze_last_n_layers or unfreeze_last_fraction")
+
+        for layer in backbone.layers[-n_layers:]:
+            if isinstance(layer, tf.keras.layers.BatchNormalization) and not train_batch_norm:
+                layer.trainable = False
+            else:
+                layer.trainable = True
+
+    trainable_backbone_layers = sum(1 for layer in backbone.layers if layer.trainable)
+    return trainable_backbone_layers, len(backbone.layers)
+
+
+def build_mobilenetv2_model(input_shape: tuple[int, int, int], cfg: MobileNetRunConfig) -> tuple[tf.keras.Model, int, int]:
+    """Create configurable MobileNetV2 model with frozen or partial fine-tuning policy."""
+
+    backbone = _build_mobilenetv2_backbone(input_shape=input_shape, pretrained_weights=cfg.pretrained_weights)
+    trainable_backbone_layers, total_backbone_layers = _apply_backbone_trainability(
+        backbone=backbone,
+        freeze_backbone=cfg.freeze_backbone,
+        unfreeze_last_n_layers=cfg.unfreeze_last_n_layers,
+        unfreeze_last_fraction=cfg.unfreeze_last_fraction,
+        train_batch_norm=cfg.train_batch_norm,
+    )
 
     inputs = tf.keras.Input(shape=input_shape, name="image_input")
     x = tf.keras.layers.Rescaling(scale=2.0, offset=-1.0, name="mobilenetv2_rescale")(inputs)
     x = backbone(x, training=False)
     x = tf.keras.layers.GlobalAveragePooling2D(name="global_avg_pool")(x)
-    x = tf.keras.layers.Dropout(dropout_rate, name="dropout")(x)
-    outputs = tf.keras.layers.Dense(num_classes, activation="softmax", name="classifier")(x)
+    x = tf.keras.layers.Dropout(cfg.dropout_rate, name="dropout")(x)
+    outputs = tf.keras.layers.Dense(cfg.num_classes, activation="softmax", name="classifier")(x)
 
-    return tf.keras.Model(inputs=inputs, outputs=outputs, name="mobilenetv2_frozen_baseline")
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=f"mobilenetv2_{cfg.experiment_id}")
+    return model, trainable_backbone_layers, total_backbone_layers
 
 
-def _param_counts(model: tf.keras.Model) -> tuple[int, int]:
+def _param_counts(model: tf.keras.Model) -> tuple[int, int, int]:
     trainable = int(np.sum([np.prod(v.shape) for v in model.trainable_weights]))
     frozen = int(np.sum([np.prod(v.shape) for v in model.non_trainable_weights]))
-    return trainable, frozen
+    return trainable, frozen, trainable + frozen
 
 
-def _collect_predictions(
-    model: tf.keras.Model,
-    dataset: tf.data.Dataset,
-    steps: int | None,
-) -> tuple[np.ndarray, np.ndarray]:
+def _collect_predictions(model: tf.keras.Model, dataset: tf.data.Dataset, steps: int | None) -> tuple[np.ndarray, np.ndarray]:
     y_true: list[np.ndarray] = []
     y_pred: list[np.ndarray] = []
 
@@ -145,7 +224,7 @@ def _plot_training_history(history: tf.keras.callbacks.History, output_path: Pat
 
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Value")
-    ax.set_title("Baseline training history")
+    ax.set_title("Training history")
     ax.legend(loc="best")
     ax.grid(True, alpha=0.2)
     fig.tight_layout()
@@ -153,194 +232,182 @@ def _plot_training_history(history: tf.keras.callbacks.History, output_path: Pat
     plt.close(fig)
 
 
-def run_baseline_training(project_root: Path) -> dict[str, Any]:
-    """Run the baseline training/evaluation/save/load workflow for Phase 3B."""
+def _from_legacy_baseline(project_root: Path, data_cfg: DataPipelineConfig, mlflow_tags: dict[str, str]) -> MobileNetRunConfig:
+    train_cfg = load_baseline_training_config(project_root)
+    return MobileNetRunConfig(
+        order=0,
+        experiment_id="legacy_baseline",
+        experiment_name="Legacy Baseline Frozen",
+        experiment_category="legacy",
+        is_control=True,
+        changed_variable="none",
+        control_value="baseline",
+        new_value="baseline",
+        rationale="Backward-compatible single baseline run path.",
+        model_family="MobileNetV2",
+        backbone="MobileNetV2",
+        pretrained_weights="imagenet",
+        num_classes=train_cfg.num_classes,
+        freeze_backbone=True,
+        unfreeze_last_n_layers=0,
+        unfreeze_last_fraction=None,
+        train_batch_norm=False,
+        batch_size=data_cfg.batch_size,
+        epochs=train_cfg.epochs,
+        steps_per_epoch=train_cfg.steps_per_epoch,
+        validation_steps=train_cfg.validation_steps,
+        evaluate_train_steps=train_cfg.evaluate_train_steps,
+        evaluate_val_steps=train_cfg.evaluate_val_steps,
+        evaluate_test_steps=train_cfg.evaluate_test_steps,
+        report_test_steps=train_cfg.report_test_steps,
+        learning_rate=train_cfg.learning_rate,
+        dropout_rate=train_cfg.dropout_rate,
+        optimizer="Adam",
+        loss="SparseCategoricalCrossentropy",
+        random_seed=train_cfg.random_seed,
+        augmentation_enabled=data_cfg.augmentation_enabled,
+        data_split_strategy="deterministic_stratified_file_manifest",
+        mlflow_tags=mlflow_tags,
+    )
+
+
+def _from_experiment_dict(raw: dict[str, Any]) -> MobileNetRunConfig:
+    data = dict(raw)
+    tags = {str(k): str(v) for k, v in data["mlflow_tags"].items()}
+    data["mlflow_tags"] = tags
+    return MobileNetRunConfig(**data)
+
+
+def run_mobilenetv2_experiment(
+    project_root: Path,
+    run_cfg: MobileNetRunConfig,
+    experiment_config_path: Path | None = None,
+) -> dict[str, Any]:
+    """Run one MobileNetV2 experiment using shared data/eval/MLflow paths."""
 
     data_cfg = load_data_pipeline_config(project_root)
-    train_cfg = load_baseline_training_config(project_root)
     mlflow_cfg = load_mlflow_config(project_root)
-    _set_reproducibility(train_cfg.random_seed)
+
+    if run_cfg.batch_size != data_cfg.batch_size:
+        raise ValueError(f"Experiment batch_size {run_cfg.batch_size} must match pipeline batch_size {data_cfg.batch_size}")
+    if run_cfg.augmentation_enabled != data_cfg.augmentation_enabled:
+        raise ValueError("Experiment augmentation setting must match the approved pipeline setting")
+
+    _set_reproducibility(run_cfg.random_seed)
 
     bundle = build_cifar10_datasets(project_root, data_cfg)
     input_shape = (data_cfg.image_size[0], data_cfg.image_size[1], 3)
 
-    model = build_mobilenetv2_frozen_model(
+    model, trainable_backbone_layers, total_backbone_layers = build_mobilenetv2_model(
         input_shape=input_shape,
-        num_classes=train_cfg.num_classes,
-        dropout_rate=train_cfg.dropout_rate,
+        cfg=run_cfg,
     )
+
+    if run_cfg.optimizer != "Adam":
+        raise ValueError("Only Adam optimizer is supported in the controlled matrix")
+    if run_cfg.loss != "SparseCategoricalCrossentropy":
+        raise ValueError("Only SparseCategoricalCrossentropy is supported in the controlled matrix")
+
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=train_cfg.learning_rate),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=run_cfg.learning_rate),
         loss=tf.keras.losses.SparseCategoricalCrossentropy(),
         metrics=["accuracy"],
     )
 
-    trainable_params, frozen_params = _param_counts(model)
+    trainable_params, frozen_params, total_params = _param_counts(model)
 
     mlflow.set_tracking_uri(mlflow_cfg.tracking_uri(project_root))
     mlflow.set_experiment(mlflow_cfg.experiment_name)
-    run_name = f"{mlflow_cfg.run_name_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = _create_run_name(mlflow_cfg.run_name_prefix, run_cfg.experiment_id, ts)
 
     with mlflow.start_run(run_name=run_name) as run:
         start = time.perf_counter()
         history = model.fit(
             bundle.train_ds,
             validation_data=bundle.val_ds,
-            epochs=train_cfg.epochs,
-            steps_per_epoch=train_cfg.steps_per_epoch,
-            validation_steps=train_cfg.validation_steps,
+            epochs=run_cfg.epochs,
+            steps_per_epoch=run_cfg.steps_per_epoch,
+            validation_steps=run_cfg.validation_steps,
             verbose=2,
         )
         training_time_sec = time.perf_counter() - start
 
-        train_eval = model.evaluate(
-            bundle.train_ds,
-            steps=train_cfg.evaluate_train_steps,
-            return_dict=True,
-            verbose=0,
-        )
-        val_eval = model.evaluate(
-            bundle.val_ds,
-            steps=train_cfg.evaluate_val_steps,
-            return_dict=True,
-            verbose=0,
-        )
-        test_eval = model.evaluate(
-            bundle.test_ds,
-            steps=train_cfg.evaluate_test_steps,
-            return_dict=True,
-            verbose=0,
-        )
+        train_eval = model.evaluate(bundle.train_ds, steps=run_cfg.evaluate_train_steps, return_dict=True, verbose=0)
+        val_eval = model.evaluate(bundle.val_ds, steps=run_cfg.evaluate_val_steps, return_dict=True, verbose=0)
+        test_eval = model.evaluate(bundle.test_ds, steps=run_cfg.evaluate_test_steps, return_dict=True, verbose=0)
 
-        y_true, y_pred = _collect_predictions(model, bundle.test_ds, train_cfg.report_test_steps)
-        cm = confusion_matrix(y_true, y_pred, labels=list(range(train_cfg.num_classes)))
+        y_true, y_pred = _collect_predictions(model, bundle.test_ds, run_cfg.report_test_steps)
+        cm = confusion_matrix(y_true, y_pred, labels=list(range(run_cfg.num_classes)))
         report_text = classification_report(
             y_true,
             y_pred,
-            labels=list(range(train_cfg.num_classes)),
+            labels=list(range(run_cfg.num_classes)),
             target_names=list(bundle.class_names),
             zero_division=0,
         )
 
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_dir = project_root / train_cfg.model_output_dir
-        report_dir = project_root / train_cfg.report_output_dir
+        model_dir = project_root / "models"
+        report_dir = project_root / "reports"
         model_dir.mkdir(parents=True, exist_ok=True)
         report_dir.mkdir(parents=True, exist_ok=True)
 
-        model_path = model_dir / f"{train_cfg.model_name}_{ts}.keras"
-        metrics_path = report_dir / f"{train_cfg.model_name}_{ts}_metrics.json"
-        cm_path = report_dir / f"{train_cfg.model_name}_{ts}_confusion_matrix.csv"
-        cls_report_path = report_dir / f"{train_cfg.model_name}_{ts}_classification_report.txt"
-        cm_image_path = report_dir / f"{train_cfg.model_name}_{ts}_confusion_matrix.png"
-        history_plot_path = report_dir / f"{train_cfg.model_name}_{ts}_training_history.png"
+        base_name = f"{run_cfg.experiment_id}_{ts}"
+        model_path = model_dir / f"{base_name}.keras"
+        metrics_path = report_dir / f"{base_name}_metrics.json"
+        cm_path = report_dir / f"{base_name}_confusion_matrix.csv"
+        cls_report_path = report_dir / f"{base_name}_classification_report.txt"
+        cm_image_path = report_dir / f"{base_name}_confusion_matrix.png"
+        history_plot_path = report_dir / f"{base_name}_training_history.png"
 
         model.save(model_path)
         loaded_model = tf.keras.models.load_model(model_path)
-
         sample_images, _ = next(iter(bundle.test_ds.take(1)))
         loaded_preds = loaded_model.predict(sample_images[:8], verbose=0)
-        inference_ok = loaded_preds.shape == (8, train_cfg.num_classes)
+        inference_ok = loaded_preds.shape == (8, run_cfg.num_classes)
 
         np.savetxt(cm_path, cm.astype(np.int32), fmt="%d", delimiter=",")
         cls_report_path.write_text(report_text, encoding="utf-8")
         _plot_confusion_matrix(cm, tuple(bundle.class_names), cm_image_path)
         _plot_training_history(history, history_plot_path)
 
-        mlflow.log_params(
-            flatten_params(
-                {
-                    "model": {
-                        "name": train_cfg.model_name,
-                        "backbone": "MobileNetV2",
-                        "pretrained_weights": "imagenet",
-                        "frozen_backbone": True,
-                        "num_classes": train_cfg.num_classes,
-                        "dropout_rate": train_cfg.dropout_rate,
-                        "learning_rate": train_cfg.learning_rate,
-                        "epochs": train_cfg.epochs,
-                        "steps_per_epoch": train_cfg.steps_per_epoch,
-                        "validation_steps": train_cfg.validation_steps,
-                        "evaluate_train_steps": train_cfg.evaluate_train_steps,
-                        "evaluate_val_steps": train_cfg.evaluate_val_steps,
-                        "evaluate_test_steps": train_cfg.evaluate_test_steps,
-                        "report_test_steps": train_cfg.report_test_steps,
-                        "optimizer": "Adam",
-                        "loss": "SparseCategoricalCrossentropy",
-                        "random_seed": train_cfg.random_seed,
-                    },
-                    "data": {
-                        "root": data_cfg.data_root,
-                        "train_subdir": data_cfg.train_subdir,
-                        "test_subdir": data_cfg.test_subdir,
-                        "image_size": list(data_cfg.image_size),
-                        "batch_size": data_cfg.batch_size,
-                        "validation_split": data_cfg.validation_split,
-                        "random_seed": data_cfg.random_seed,
-                        "shuffle_buffer_size": data_cfg.shuffle_buffer_size,
-                        "num_parallel_calls": data_cfg.num_parallel_calls,
-                        "cache_train": data_cfg.cache_train,
-                        "cache_eval": data_cfg.cache_eval,
-                        "prefetch": data_cfg.prefetch,
-                        "augmentation_enabled": data_cfg.augmentation_enabled,
-                        "augmentation_padding": data_cfg.augmentation_padding,
-                        "augmentation_horizontal_flip": data_cfg.augmentation_horizontal_flip,
-                        "split_strategy": "deterministic_stratified_file_manifest",
-                        "class_names": list(bundle.class_names),
-                        "train_images": bundle.train_images,
-                        "val_images": bundle.val_images,
-                        "test_images": bundle.test_images,
-                    },
-                }
-            )
-        )
-        mlflow.log_metrics(
-            flatten_metrics(
-                {
-                    "training": {
-                        "time_sec": training_time_sec,
-                        "trainable_params": trainable_params,
-                        "frozen_params": frozen_params,
-                    },
-                    "history_final": {
-                        "loss": float(history.history["loss"][-1]),
-                        "accuracy": float(history.history["accuracy"][-1]),
-                        "val_loss": float(history.history["val_loss"][-1]),
-                        "val_accuracy": float(history.history["val_accuracy"][-1]),
-                    },
-                    "eval": {
-                        "train_loss": float(train_eval["loss"]),
-                        "train_accuracy": float(train_eval["accuracy"]),
-                        "val_loss": float(val_eval["loss"]),
-                        "val_accuracy": float(val_eval["accuracy"]),
-                        "test_loss": float(test_eval["loss"]),
-                        "test_accuracy": float(test_eval["accuracy"]),
-                    },
-                }
-            )
-        )
-        for epoch_index, loss_value in enumerate(history.history.get("loss", [])):
-            mlflow.log_metric("history.loss", float(loss_value), step=epoch_index)
-        for epoch_index, accuracy_value in enumerate(history.history.get("accuracy", [])):
-            mlflow.log_metric("history.accuracy", float(accuracy_value), step=epoch_index)
-        for epoch_index, loss_value in enumerate(history.history.get("val_loss", [])):
-            mlflow.log_metric("history.val_loss", float(loss_value), step=epoch_index)
-        for epoch_index, accuracy_value in enumerate(history.history.get("val_accuracy", [])):
-            mlflow.log_metric("history.val_accuracy", float(accuracy_value), step=epoch_index)
-        mlflow.set_tags({**mlflow_cfg.tags, "run_id": run.info.run_id})
-        metrics_path.write_text(json.dumps({
+        env = {
+            "python": f"{tf.sysconfig.get_build_info().get('python_version', 'unknown')}",
+            "tensorflow": tf.__version__,
+            "keras": tf.keras.__version__,
+            "mlflow": mlflow.__version__,
+            "matplotlib": matplotlib.__version__,
+        }
+
+        verification = {
+            "model_build_success": True,
+            "model_train_success": True,
+            "model_eval_success": True,
+            "model_save_success": model_path.exists(),
+            "model_load_success": loaded_model is not None,
+            "inference_batch_success": bool(inference_ok),
+            "mlflow_run_success": True,
+        }
+
+        result = {
             "timestamp": ts,
+            "run_id": run.info.run_id,
+            "run_name": run_name,
+            "experiment": asdict(run_cfg),
             "data_config": asdict(data_cfg),
             "mlflow_config": asdict(mlflow_cfg),
-            "training_config": asdict(train_cfg),
             "class_names": list(bundle.class_names),
             "sample_counts": {
                 "train": bundle.train_images,
                 "val": bundle.val_images,
                 "test": bundle.test_images,
             },
+            "trainable_backbone_layers": trainable_backbone_layers,
+            "total_backbone_layers": total_backbone_layers,
             "trainable_params": trainable_params,
             "frozen_params": frozen_params,
+            "total_params": total_params,
             "training_time_sec": training_time_sec,
             "history_final": {
                 "loss": float(history.history["loss"][-1]),
@@ -353,6 +420,7 @@ def run_baseline_training(project_root: Path) -> dict[str, Any]:
                 "val": {"loss": float(val_eval["loss"]), "accuracy": float(val_eval["accuracy"])},
                 "test": {"loss": float(test_eval["loss"]), "accuracy": float(test_eval["accuracy"])},
             },
+            "environment": env,
             "artifacts": {
                 "model": str(model_path),
                 "metrics_json": str(metrics_path),
@@ -361,16 +429,78 @@ def run_baseline_training(project_root: Path) -> dict[str, Any]:
                 "confusion_matrix_png": str(cm_image_path),
                 "training_history_png": str(history_plot_path),
             },
-            "verification": {
-                "model_build_success": True,
-                "model_train_success": True,
-                "model_eval_success": True,
-                "model_save_success": model_path.exists(),
-                "model_load_success": loaded_model is not None,
-                "inference_batch_success": bool(inference_ok),
-                "mlflow_run_success": True,
+            "verification": verification,
+        }
+
+        metrics_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+        params_payload = {
+            "experiment": asdict(run_cfg),
+            "data": {
+                "root": data_cfg.data_root,
+                "train_subdir": data_cfg.train_subdir,
+                "test_subdir": data_cfg.test_subdir,
+                "image_size": list(data_cfg.image_size),
+                "batch_size": data_cfg.batch_size,
+                "validation_split": data_cfg.validation_split,
+                "random_seed": data_cfg.random_seed,
+                "augmentation_enabled": data_cfg.augmentation_enabled,
+                "split_strategy": "deterministic_stratified_file_manifest",
+                "train_images": bundle.train_images,
+                "val_images": bundle.val_images,
+                "test_images": bundle.test_images,
             },
-        }, indent=2), encoding="utf-8")
+            "verification": verification,
+            "environment": env,
+        }
+
+        metrics_payload = {
+            "training": {
+                "time_sec": training_time_sec,
+                "trainable_params": trainable_params,
+                "frozen_params": frozen_params,
+                "total_params": total_params,
+                "trainable_backbone_layers": trainable_backbone_layers,
+                "total_backbone_layers": total_backbone_layers,
+            },
+            "history_final": result["history_final"],
+            "eval": {
+                "train_loss": float(train_eval["loss"]),
+                "train_accuracy": float(train_eval["accuracy"]),
+                "val_loss": float(val_eval["loss"]),
+                "val_accuracy": float(val_eval["accuracy"]),
+                "test_loss": float(test_eval["loss"]),
+                "test_accuracy": float(test_eval["accuracy"]),
+            },
+        }
+
+        mlflow.log_params(flatten_params(params_payload))
+        mlflow.log_metrics(flatten_metrics(metrics_payload))
+
+        for epoch_index, loss_value in enumerate(history.history.get("loss", [])):
+            mlflow.log_metric("history.loss", float(loss_value), step=epoch_index)
+        for epoch_index, accuracy_value in enumerate(history.history.get("accuracy", [])):
+            mlflow.log_metric("history.accuracy", float(accuracy_value), step=epoch_index)
+        for epoch_index, loss_value in enumerate(history.history.get("val_loss", [])):
+            mlflow.log_metric("history.val_loss", float(loss_value), step=epoch_index)
+        for epoch_index, accuracy_value in enumerate(history.history.get("val_accuracy", [])):
+            mlflow.log_metric("history.val_accuracy", float(accuracy_value), step=epoch_index)
+
+        mlflow_tags = {
+            **mlflow_cfg.tags,
+            **run_cfg.mlflow_tags,
+            "run_id": run.info.run_id,
+            "experiment_id": run_cfg.experiment_id,
+            "experiment_category": run_cfg.experiment_category,
+            "changed_variable": run_cfg.changed_variable,
+            "control_flag": str(run_cfg.is_control).lower(),
+            "model_family": run_cfg.model_family,
+            "phase": run_cfg.mlflow_tags.get("phase", "4B"),
+            "split_strategy": run_cfg.data_split_strategy,
+            "repro_seed": str(run_cfg.random_seed),
+        }
+        mlflow.set_tags(mlflow_tags)
+
         mlflow.log_artifact(str(model_path), artifact_path="model")
         mlflow.log_artifact(str(metrics_path), artifact_path="reports")
         mlflow.log_artifact(str(cm_path), artifact_path="reports")
@@ -379,9 +509,30 @@ def run_baseline_training(project_root: Path) -> dict[str, Any]:
         mlflow.log_artifact(str(history_plot_path), artifact_path="reports")
         mlflow.log_artifact(str(project_root / "configs" / "baseline_training.json"), artifact_path="configs")
         mlflow.log_artifact(str(project_root / "configs" / "data_pipeline.json"), artifact_path="configs")
+        if experiment_config_path is not None and experiment_config_path.exists():
+            mlflow.log_artifact(str(experiment_config_path), artifact_path="configs")
 
-        result = json.loads(metrics_path.read_text(encoding="utf-8"))
         return result
+
+
+def run_mobilenetv2_experiment_from_config(
+    project_root: Path,
+    config_path: Path,
+) -> dict[str, Any]:
+    """Run one experiment directly from a JSON experiment config path."""
+
+    raw = json.loads(config_path.read_text(encoding="utf-8"))
+    run_cfg = _from_experiment_dict(raw)
+    return run_mobilenetv2_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=config_path)
+
+
+def run_baseline_training(project_root: Path) -> dict[str, Any]:
+    """Backward-compatible baseline entry point used by existing tests and docs."""
+
+    data_cfg = load_data_pipeline_config(project_root)
+    mlflow_cfg = load_mlflow_config(project_root)
+    run_cfg = _from_legacy_baseline(project_root, data_cfg, mlflow_tags=mlflow_cfg.tags)
+    return run_mobilenetv2_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=None)
 
 
 def main() -> None:

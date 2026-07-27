@@ -27,8 +27,8 @@
 - Log parameters, metrics, artifacts, and dataset metadata for every run.
 - Phase 4A complete: corrected frozen MobileNetV2 baseline now writes one local MLflow run per execution.
 - Baseline runs log hyperparameters, data description, evaluation metrics, model artifacts, and training plots.
-- Execute at least 5 meaningfully different experiment runs.
-- Build run-comparison workflow and rank experiments.
+- Phase 4B complete: controlled five-run MobileNetV2 matrix executed with deterministic config validation.
+- Programmatic run comparison and deterministic selection implemented via MLflow search-based tooling.
 
 ## Phase 5 - Model Selection
 

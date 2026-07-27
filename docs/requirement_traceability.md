@@ -10,8 +10,8 @@
 | Data and model | preprocessing decisions documented | Yes | Not Started | TBD | |
 | Data and model | no data leakage | Yes | Not Started | TBD | |
 | Data and model | held-out test set used | Yes | Not Started | TBD | |
-| Data and model | at least 3 meaningfully different model configurations | Yes | Not Started | TBD | |
-| Data and model | at least 3 appropriate evaluation metrics per model | Yes | Not Started | TBD | |
+| Data and model | at least 3 meaningfully different model configurations | Yes | Completed | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) | Five controlled MobileNetV2 configurations executed. |
+| Data and model | at least 3 appropriate evaluation metrics per model | Yes | Completed | [reports/model_comparison.md](reports/model_comparison.md) | Train/validation/test accuracy and loss logged per run. |
 | Data and model | reasonable model performance | Yes | Not Started | TBD | |
 | Data and model | best model selected and justified | Yes | Not Started | TBD | |
 | MLflow | MLflow integrated into training workflow | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Local MLflow tracking added for the corrected baseline. |
@@ -19,9 +19,9 @@
 | MLflow | every run logs data version or data description | Yes | Completed | [configs/mlflow.json](configs/mlflow.json) | Run metadata includes the canonical data layout and split strategy. |
 | MLflow | every run logs all evaluation metrics | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Train, validation, test, and history metrics are logged. |
 | MLflow | every run logs the trained model as an artifact | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Keras model, reports, and diagnostic plots are logged. |
-| MLflow | at least 5 meaningfully different experiment runs | Yes | Not Started | TBD | |
-| MLflow | mlflow.search_runs() used | Yes | Not Started | TBD | |
-| MLflow | best run identified programmatically | Yes | Not Started | TBD | |
+| MLflow | at least 5 meaningfully different experiment runs | Yes | Completed | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) | Controlled five-run Phase 4B matrix completed. |
+| MLflow | mlflow.search_runs() used | Yes | Completed | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py) | Run retrieval and filtering are driven by MLflow search APIs. |
+| MLflow | best run identified programmatically | Yes | Completed | [src/decision_intelligence_engine/select_experiment.py](src/decision_intelligence_engine/select_experiment.py) | Deterministic selection outputs strongest frozen, fine-tuned, and overall run. |
 | LLM interface | focused interface for the trained model, not a general chatbot | Yes | Not Started | TBD | |
 | LLM interface | natural-language input parsed into required model features | Yes | Not Started | TBD | |
 | LLM interface | actual selected trained model loaded | Yes | Not Started | TBD | |

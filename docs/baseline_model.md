@@ -104,6 +104,16 @@ The corrected validation and test metrics are now reasonably aligned for a short
 - End-to-end transfer-learning training pipeline is now functional and reproducible.
 - Frozen-backbone baseline can be used as the control point for future MLflow experiments.
 
+## Phase 4B Follow-Up
+
+A controlled MobileNetV2 matrix was executed in Phase 4B with one-variable frozen variants and one constrained fine-tuning variant.
+
+- strongest frozen configuration: `mnetv2_longer_frozen_epochs`
+- strongest fine-tuned configuration: `mnetv2_partial_finetune_tail`
+- overall selected MobileNetV2: `mnetv2_longer_frozen_epochs`
+
+Selection used validation accuracy as the primary metric, with tie-breakers on validation loss, generalization gap, complexity, and duration.
+
 ## Limitations
 
 - This run is intentionally short and under-trained.

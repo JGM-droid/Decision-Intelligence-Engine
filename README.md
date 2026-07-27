@@ -1,10 +1,10 @@
 # Decision Intelligence Engine
 
-Decision Intelligence Engine is a computer-vision decision-support project built around CIFAR-10 image classification. The current workstream uses a deterministic data pipeline, a corrected frozen MobileNetV2 baseline, and local MLflow tracking to keep the training workflow reproducible and reviewable.
+Decision Intelligence Engine is a computer-vision decision-support project built around CIFAR-10 image classification. The current workstream uses a deterministic data pipeline, a corrected MobileNetV2 baseline, a controlled five-run MobileNetV2 experiment matrix, and local MLflow tracking for reproducible model selection.
 
 ## Project Description
 
-The project classifies CIFAR-10 images and will later surface those predictions through a focused user-facing interface with explanation support. Phase 4A adds MLflow around the corrected baseline so each run captures parameters, metrics, artifacts, and experiment metadata.
+The project classifies CIFAR-10 images and will later surface those predictions through a focused user-facing interface with explanation support. Phase 4A added MLflow around the corrected baseline; Phase 4B adds a controlled MobileNetV2 matrix with programmatic MLflow comparison and deterministic selection criteria.
 
 ## Intended Users and Problem
 
@@ -24,13 +24,15 @@ Not applicable for the current phase. No LLM provider is wired in yet, and no AP
 
 ## Usage
 
-Run the baseline workflow with the project interpreter, for example:
+Run the controlled experiment matrix with the project interpreter, for example:
 
 ```bash
-python -m src.decision_intelligence_engine.baseline_training
+python -m src.decision_intelligence_engine.run_experiments --all
+python -m src.decision_intelligence_engine.compare_experiments --write-reports
+python -m src.decision_intelligence_engine.select_experiment
 ```
 
-The command trains the corrected frozen baseline, writes local model and report artifacts, and creates one MLflow run for the execution.
+These commands execute the approved experiments, generate MLflow-backed comparison reports, and produce a deterministic winner summary.
 
 ## Architecture
 
@@ -38,11 +40,11 @@ The system is organized around three layers: data pipeline, model training/evalu
 
 ## Model Results
 
-The corrected frozen baseline currently serves as the reference run. It is intentionally short and under-trained, but it now produces aligned train/validation/test metrics and logs the model, confusion matrix, classification report, and training-history plots to MLflow.
+The current selected MobileNetV2 configuration is the frozen longer-training variant based on explicit validation-first criteria. Fine-tuning was tested and tracked, but did not materially outperform the strongest frozen configuration.
 
 ## Limitations
 
-The project does not yet include the LLM interface or Streamlit app, and the baseline is not tuned for final accuracy. MLflow comparison work still needs multiple distinct runs before model selection can begin.
+The project does not yet include the LLM interface or Streamlit app, and architecture comparison is not started yet. Results are specific to MobileNetV2 under controlled local-runtime constraints.
 
 ## Reflection
 
@@ -50,4 +52,4 @@ The main lesson so far is that reproducible file-manifest splitting and serializ
 
 ## Demo
 
-The current demonstration is the baseline training command plus the local MLflow UI. Start the UI with `mlflow ui --backend-store-uri file:./mlruns` after at least one run has completed.
+The current demonstration is the controlled experiment matrix plus MLflow comparison outputs. Start the UI with `mlflow ui --backend-store-uri file:./mlruns` after the matrix run.

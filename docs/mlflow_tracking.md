@@ -24,6 +24,22 @@ Each baseline run records:
 - per-epoch history metrics
 - model artifact, metrics JSON, confusion matrix CSV, classification report, confusion matrix plot, and training-history plot
 
+Phase 4B matrix runs additionally log:
+
+- experiment ID/category/change tags
+- run-level reproducibility tags
+- environment version metadata
+- experiment config artifacts from `configs/experiments/`
+
 ## Current Status
 
-Phase 4A is complete for the corrected frozen baseline. The workflow is now instrumented, but the project still needs at least five meaningfully different runs before model comparison and selection can begin.
+Phase 4A and Phase 4B are complete for MobileNetV2:
+
+- baseline instrumentation verified
+- five controlled MobileNetV2 runs executed
+- MLflow search-based comparison and deterministic selection implemented
+
+Comparison tooling:
+
+- `python -m src.decision_intelligence_engine.compare_experiments --write-reports`
+- `python -m src.decision_intelligence_engine.select_experiment`
