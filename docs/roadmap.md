@@ -36,6 +36,8 @@
 - Validate chosen model on held-out test set and summarize tradeoffs.
 - Freeze best model artifact and label mapping for inference.
 - Document model selection rationale and performance summary.
+- Phase 5A complete: selected MobileNetV2 32x32, MobileNetV2 96x96 resolution control, and EfficientNetB0 96x96 were compared through one shared MLflow-backed workflow.
+- Architecture comparison now has dedicated reports, a matched-resolution control, and deterministic final-selection logic.
 
 ## Phase 6 - LLM Integration
 

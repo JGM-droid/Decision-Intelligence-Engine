@@ -102,9 +102,11 @@ The frozen longer-epochs run wins by primary metric (validation accuracy), with 
 
 - MobileNetV2 still receives 32x32 images, below native pretraining scale.
 - The matrix is intentionally conservative for local runtime.
-- Findings are architecture-local and not yet compared against EfficientNet.
+- Phase 4B findings are architecture-local; Phase 5A later adds the cross-architecture comparison and the 96x96 resolution-control run.
 
 ## Next Step Before Architecture Comparison
 
 - lock this selected MobileNetV2 configuration as the architecture-comparison control
 - proceed to cross-architecture experiments only after preserving this evidence baseline
+
+Phase 5A execution uses this selected configuration (`mnetv2_longer_frozen_epochs`) as the 32x32 comparison anchor, then adds a MobileNetV2 96x96 resolution-control run and a matched-resolution EfficientNetB0 run. See `docs/architecture_comparison.md`.

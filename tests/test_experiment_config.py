@@ -22,6 +22,8 @@ def test_matrix_contains_required_experiment_ids(project_root: Path | None = Non
         "mnetv2_lower_lr_frozen",
         "mnetv2_higher_dropout_frozen",
         "mnetv2_partial_finetune_tail",
+        "efficientnetb0_control_frozen",
+        "mobilenetv2_96x96_control",
     }
     assert observed == expected
 
@@ -29,7 +31,7 @@ def test_matrix_contains_required_experiment_ids(project_root: Path | None = Non
 def test_matrix_validation_passes_for_repo_configs() -> None:
     result = validate_experiment_matrix(Path.cwd())
     assert result.control_experiment_id == "mnetv2_control_frozen"
-    assert len(result.experiment_ids) == 5
+    assert len(result.experiment_ids) == 7
 
 
 def test_single_variable_experiment_rejects_extra_change(tmp_path: Path) -> None:
@@ -88,3 +90,37 @@ def test_fine_tune_exception_is_explicit() -> None:
     assert cfg.changed_variable == "backbone_trainability+learning_rate"
     assert cfg.freeze_backbone is False
     assert cfg.train_batch_norm is False
+
+
+def test_efficientnet_config_is_supported_and_declares_architecture_change() -> None:
+    cfg = get_experiment_by_id(load_experiment_configs(Path.cwd()), "efficientnetb0_control_frozen")
+    assert cfg.backbone == "EfficientNetB0"
+    assert cfg.model_family == "EfficientNetB0"
+    assert cfg.changed_variable == "architecture"
+    assert cfg.experiment_category == "architecture_screening"
+    assert cfg.architecture_required_changes == ("model_input_resolution", "preprocessing_function")
+
+
+def test_mobilenet_96x96_resolution_control_preserves_mobilenet_preprocessing() -> None:
+    cfg = get_experiment_by_id(load_experiment_configs(Path.cwd()), "mobilenetv2_96x96_control")
+    assert cfg.backbone == "MobileNetV2"
+    assert cfg.model_family == "MobileNetV2"
+    assert cfg.changed_variable == "model_input_resolution"
+    assert cfg.model_input_resolution == (96, 96)
+    assert cfg.preprocessing_function == "mobilenetv2_rescale_neg1_to_1"
+    assert cfg.architecture_required_changes == ("model_input_resolution",)
+
+
+def test_invalid_architecture_is_rejected(tmp_path: Path) -> None:
+    source = Path.cwd() / "configs" / "experiments" / "06_efficientnetb0_frozen_baseline.json"
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["backbone"] = "InvalidNet"
+    payload["model_family"] = "InvalidNet"
+
+    bad_cfg = tmp_path / "bad.json"
+    bad_cfg.write_text(json.dumps(payload), encoding="utf-8")
+
+    from src.decision_intelligence_engine.experiment_config import load_experiment_config
+
+    with pytest.raises(ValueError):
+        load_experiment_config(bad_cfg)

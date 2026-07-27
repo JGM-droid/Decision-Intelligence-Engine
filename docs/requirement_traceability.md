@@ -14,6 +14,7 @@
 | Data and model | at least 3 appropriate evaluation metrics per model | Yes | Completed | [reports/model_comparison.md](reports/model_comparison.md) | Train/validation/test accuracy and loss logged per run. |
 | Data and model | reasonable model performance | Yes | Not Started | TBD | |
 | Data and model | best model selected and justified | Yes | Not Started | TBD | |
+| Data and model | controlled cross-architecture screening before architecture tuning | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | Phase 5A adds a matched-resolution MobileNetV2 control, a final EfficientNetB0 comparison run, and deterministic architecture-selection logic. |
 | MLflow | MLflow integrated into training workflow | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Local MLflow tracking added for the corrected baseline. |
 | MLflow | every run logs all hyperparameters | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Hyperparameters, data config, and baseline settings are logged. |
 | MLflow | every run logs data version or data description | Yes | Completed | [configs/mlflow.json](configs/mlflow.json) | Run metadata includes the canonical data layout and split strategy. |
@@ -22,6 +23,7 @@
 | MLflow | at least 5 meaningfully different experiment runs | Yes | Completed | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) | Controlled five-run Phase 4B matrix completed. |
 | MLflow | mlflow.search_runs() used | Yes | Completed | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py) | Run retrieval and filtering are driven by MLflow search APIs. |
 | MLflow | best run identified programmatically | Yes | Completed | [src/decision_intelligence_engine/select_experiment.py](src/decision_intelligence_engine/select_experiment.py) | Deterministic selection outputs strongest frozen, fine-tuned, and overall run. |
+| MLflow | architecture comparison logged and reported from MLflow data | Yes | Completed | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py) | Phase 5A architecture comparison reports are generated from MLflow search results without manual metric entry. |
 | LLM interface | focused interface for the trained model, not a general chatbot | Yes | Not Started | TBD | |
 | LLM interface | natural-language input parsed into required model features | Yes | Not Started | TBD | |
 | LLM interface | actual selected trained model loaded | Yes | Not Started | TBD | |

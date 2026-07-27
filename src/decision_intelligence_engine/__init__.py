@@ -7,6 +7,7 @@ from .data_pipeline import (
 	inspect_label_range,
 )
 from .experiment_config import (
+	ExperimentConfig,
 	MobileNetExperimentConfig,
 	load_experiment_configs,
 	validate_experiment_matrix,
@@ -17,6 +18,7 @@ from .pipeline_config import DataPipelineConfig, load_data_pipeline_config
 __all__ = [
 	"DataPipelineConfig",
 	"DatasetBundle",
+	"ExperimentConfig",
 	"MobileNetExperimentConfig",
 	"build_cifar10_datasets",
 	"MlflowConfig",

@@ -119,3 +119,17 @@ Selection used validation accuracy as the primary metric, with tie-breakers on v
 - This run is intentionally short and under-trained.
 - MobileNetV2 receives 32x32 inputs, so pretrained features are not used at their native scale.
 - No fine-tuning was performed in this phase by design.
+
+## Phase 5A Architecture Screening Follow-Up
+
+Phase 5A expanded beyond the first EfficientNetB0 screening run and completed a three-way comparison:
+
+- MobileNetV2 32x32 selected frozen configuration
+- MobileNetV2 96x96 frozen resolution-control run
+- EfficientNetB0 96x96 frozen architecture run
+
+- comparison target remains `mnetv2_longer_frozen_epochs`
+- MobileNetV2 96x96 isolates the effect of input resolution while preserving MobileNetV2 preprocessing
+- EfficientNetB0 remains stronger at matched 96x96 input resolution, supporting its final selection
+
+See [docs/architecture_comparison.md](docs/architecture_comparison.md).

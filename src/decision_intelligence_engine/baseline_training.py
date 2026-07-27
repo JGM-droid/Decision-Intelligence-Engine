@@ -1,8 +1,8 @@
-"""MobileNetV2 training workflow for baseline and controlled experiments."""
+"""Shared transfer-learning training workflow for controlled experiments."""
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 import json
 from pathlib import Path
@@ -56,8 +56,8 @@ class BaselineTrainingConfig:
 
 
 @dataclass(frozen=True)
-class MobileNetRunConfig:
-    """Effective run configuration for a single MobileNetV2 experiment."""
+class ModelRunConfig:
+    """Effective run configuration for a single transfer-learning experiment."""
 
     order: int
     experiment_id: str
@@ -91,7 +91,30 @@ class MobileNetRunConfig:
     random_seed: int
     augmentation_enabled: bool
     data_split_strategy: str
-    mlflow_tags: dict[str, str]
+    mlflow_tags: dict[str, str] = field(default_factory=dict)
+    model_input_resolution: tuple[int, int] | None = None
+    preprocessing_function: str | None = None
+    architecture_required_changes: tuple[str, ...] = ()
+
+
+# Backward-compatible alias retained for existing tests/imports.
+MobileNetRunConfig = ModelRunConfig
+
+
+SUPPORTED_BACKBONES = {"MobileNetV2", "EfficientNetB0"}
+
+
+def _default_model_input_resolution(backbone: str) -> tuple[int, int]:
+    if backbone == "EfficientNetB0":
+        # Practical screening resolution that remains valid for ImageNet-initialized EfficientNetB0.
+        return (96, 96)
+    return (32, 32)
+
+
+def _default_preprocessing_function(backbone: str) -> str:
+    if backbone == "EfficientNetB0":
+        return "efficientnetb0_builtin_rescaling_with_input_scale_255"
+    return "mobilenetv2_rescale_neg1_to_1"
 
 
 def load_baseline_training_config(project_root: Path, path: Path | None = None) -> BaselineTrainingConfig:
@@ -112,12 +135,20 @@ def _create_run_name(prefix: str, experiment_id: str, timestamp: str) -> str:
     return f"{prefix}_{experiment_id}_{timestamp}"
 
 
-def _build_mobilenetv2_backbone(input_shape: tuple[int, int, int], pretrained_weights: str) -> tf.keras.Model:
-    return tf.keras.applications.MobileNetV2(
-        include_top=False,
-        weights=pretrained_weights,
-        input_shape=input_shape,
-    )
+def _build_backbone(backbone: str, input_shape: tuple[int, int, int], pretrained_weights: str) -> tf.keras.Model:
+    if backbone == "MobileNetV2":
+        return tf.keras.applications.MobileNetV2(
+            include_top=False,
+            weights=pretrained_weights,
+            input_shape=input_shape,
+        )
+    if backbone == "EfficientNetB0":
+        return tf.keras.applications.EfficientNetB0(
+            include_top=False,
+            weights=pretrained_weights,
+            input_shape=input_shape,
+        )
+    raise ValueError(f"Unsupported backbone: {backbone}")
 
 
 def _apply_backbone_trainability(
@@ -149,10 +180,28 @@ def _apply_backbone_trainability(
     return trainable_backbone_layers, len(backbone.layers)
 
 
-def build_mobilenetv2_model(input_shape: tuple[int, int, int], cfg: MobileNetRunConfig) -> tuple[tf.keras.Model, int, int]:
-    """Create configurable MobileNetV2 model with frozen or partial fine-tuning policy."""
+def _resolve_model_resolution(cfg: ModelRunConfig, dataset_input_shape: tuple[int, int, int]) -> tuple[int, int]:
+    if cfg.model_input_resolution is None:
+        return _default_model_input_resolution(cfg.backbone)
+    return (int(cfg.model_input_resolution[0]), int(cfg.model_input_resolution[1]))
 
-    backbone = _build_mobilenetv2_backbone(input_shape=input_shape, pretrained_weights=cfg.pretrained_weights)
+
+def _resolve_preprocessing(cfg: ModelRunConfig) -> str:
+    if cfg.preprocessing_function:
+        return cfg.preprocessing_function
+    return _default_preprocessing_function(cfg.backbone)
+
+
+def build_transfer_model(input_shape: tuple[int, int, int], cfg: ModelRunConfig) -> tuple[tf.keras.Model, int, int]:
+    """Create configurable transfer-learning model for approved backbones."""
+
+    if cfg.backbone not in SUPPORTED_BACKBONES:
+        raise ValueError(f"Unsupported backbone: {cfg.backbone}")
+
+    model_resolution = _resolve_model_resolution(cfg, input_shape)
+    backbone_input_shape = (model_resolution[0], model_resolution[1], 3)
+    backbone = _build_backbone(backbone=cfg.backbone, input_shape=backbone_input_shape, pretrained_weights=cfg.pretrained_weights)
+
     trainable_backbone_layers, total_backbone_layers = _apply_backbone_trainability(
         backbone=backbone,
         freeze_backbone=cfg.freeze_backbone,
@@ -162,14 +211,40 @@ def build_mobilenetv2_model(input_shape: tuple[int, int, int], cfg: MobileNetRun
     )
 
     inputs = tf.keras.Input(shape=input_shape, name="image_input")
-    x = tf.keras.layers.Rescaling(scale=2.0, offset=-1.0, name="mobilenetv2_rescale")(inputs)
+    x = inputs
+
+    if model_resolution != input_shape[:2]:
+        x = tf.keras.layers.Resizing(
+            model_resolution[0],
+            model_resolution[1],
+            interpolation="bilinear",
+            name=f"{cfg.backbone.lower()}_resize",
+        )(x)
+
+    preprocessing = _resolve_preprocessing(cfg)
+    if preprocessing == "mobilenetv2_rescale_neg1_to_1":
+        x = tf.keras.layers.Rescaling(scale=2.0, offset=-1.0, name="mobilenetv2_rescale")(x)
+    elif preprocessing == "efficientnetb0_builtin_rescaling_with_input_scale_255":
+        # TF 2.16/Keras 3 EfficientNetB0 includes internal rescaling and expects 0..255 scale.
+        x = tf.keras.layers.Rescaling(scale=255.0, name="efficientnet_input_scale_255")(x)
+    else:
+        raise ValueError(f"Unsupported preprocessing function: {preprocessing}")
+
     x = backbone(x, training=False)
     x = tf.keras.layers.GlobalAveragePooling2D(name="global_avg_pool")(x)
     x = tf.keras.layers.Dropout(cfg.dropout_rate, name="dropout")(x)
     outputs = tf.keras.layers.Dense(cfg.num_classes, activation="softmax", name="classifier")(x)
 
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=f"mobilenetv2_{cfg.experiment_id}")
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=f"{cfg.backbone.lower()}_{cfg.experiment_id}")
     return model, trainable_backbone_layers, total_backbone_layers
+
+
+def build_mobilenetv2_model(input_shape: tuple[int, int, int], cfg: MobileNetRunConfig) -> tuple[tf.keras.Model, int, int]:
+    """Backward-compatible helper retained for MobileNetV2-only test usage."""
+
+    if cfg.backbone != "MobileNetV2":
+        raise ValueError("build_mobilenetv2_model only supports MobileNetV2 configs")
+    return build_transfer_model(input_shape=input_shape, cfg=cfg)
 
 
 def _param_counts(model: tf.keras.Model) -> tuple[int, int, int]:
@@ -232,9 +307,9 @@ def _plot_training_history(history: tf.keras.callbacks.History, output_path: Pat
     plt.close(fig)
 
 
-def _from_legacy_baseline(project_root: Path, data_cfg: DataPipelineConfig, mlflow_tags: dict[str, str]) -> MobileNetRunConfig:
+def _from_legacy_baseline(project_root: Path, data_cfg: DataPipelineConfig, mlflow_tags: dict[str, str]) -> ModelRunConfig:
     train_cfg = load_baseline_training_config(project_root)
-    return MobileNetRunConfig(
+    return ModelRunConfig(
         order=0,
         experiment_id="legacy_baseline",
         experiment_name="Legacy Baseline Frozen",
@@ -267,23 +342,30 @@ def _from_legacy_baseline(project_root: Path, data_cfg: DataPipelineConfig, mlfl
         random_seed=train_cfg.random_seed,
         augmentation_enabled=data_cfg.augmentation_enabled,
         data_split_strategy="deterministic_stratified_file_manifest",
+        model_input_resolution=data_cfg.image_size,
+        preprocessing_function="mobilenetv2_rescale_neg1_to_1",
+        architecture_required_changes=(),
         mlflow_tags=mlflow_tags,
     )
 
 
-def _from_experiment_dict(raw: dict[str, Any]) -> MobileNetRunConfig:
+def _from_experiment_dict(raw: dict[str, Any]) -> ModelRunConfig:
     data = dict(raw)
     tags = {str(k): str(v) for k, v in data["mlflow_tags"].items()}
     data["mlflow_tags"] = tags
-    return MobileNetRunConfig(**data)
+    if "model_input_resolution" in data and data["model_input_resolution"] is not None:
+        data["model_input_resolution"] = tuple(int(v) for v in data["model_input_resolution"])
+    if "architecture_required_changes" in data and data["architecture_required_changes"] is not None:
+        data["architecture_required_changes"] = tuple(str(v) for v in data["architecture_required_changes"])
+    return ModelRunConfig(**data)
 
 
-def run_mobilenetv2_experiment(
+def run_transfer_experiment(
     project_root: Path,
-    run_cfg: MobileNetRunConfig,
+    run_cfg: ModelRunConfig,
     experiment_config_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Run one MobileNetV2 experiment using shared data/eval/MLflow paths."""
+    """Run one transfer-learning experiment using shared data/eval/MLflow paths."""
 
     data_cfg = load_data_pipeline_config(project_root)
     mlflow_cfg = load_mlflow_config(project_root)
@@ -298,7 +380,10 @@ def run_mobilenetv2_experiment(
     bundle = build_cifar10_datasets(project_root, data_cfg)
     input_shape = (data_cfg.image_size[0], data_cfg.image_size[1], 3)
 
-    model, trainable_backbone_layers, total_backbone_layers = build_mobilenetv2_model(
+    model_input_resolution = _resolve_model_resolution(run_cfg, input_shape)
+    preprocessing_function = _resolve_preprocessing(run_cfg)
+
+    model, trainable_backbone_layers, total_backbone_layers = build_transfer_model(
         input_shape=input_shape,
         cfg=run_cfg,
     )
@@ -421,6 +506,12 @@ def run_mobilenetv2_experiment(
                 "test": {"loss": float(test_eval["loss"]), "accuracy": float(test_eval["accuracy"])},
             },
             "environment": env,
+            "architecture": {
+                "dataset_input_resolution": list(input_shape[:2]),
+                "model_input_resolution": list(model_input_resolution),
+                "preprocessing_function": preprocessing_function,
+                "architecture_required_changes": list(run_cfg.architecture_required_changes),
+            },
             "artifacts": {
                 "model": str(model_path),
                 "metrics_json": str(metrics_path),
@@ -446,6 +537,10 @@ def run_mobilenetv2_experiment(
                 "random_seed": data_cfg.random_seed,
                 "augmentation_enabled": data_cfg.augmentation_enabled,
                 "split_strategy": "deterministic_stratified_file_manifest",
+                "original_image_size": list(data_cfg.image_size),
+                "model_input_resolution": list(model_input_resolution),
+                "preprocessing_function": preprocessing_function,
+                "architecture_required_changes": list(run_cfg.architecture_required_changes),
                 "train_images": bundle.train_images,
                 "val_images": bundle.val_images,
                 "test_images": bundle.test_images,
@@ -498,6 +593,8 @@ def run_mobilenetv2_experiment(
             "phase": run_cfg.mlflow_tags.get("phase", "4B"),
             "split_strategy": run_cfg.data_split_strategy,
             "repro_seed": str(run_cfg.random_seed),
+            "backbone": run_cfg.backbone,
+            "preprocessing_function": preprocessing_function,
         }
         mlflow.set_tags(mlflow_tags)
 
@@ -515,6 +612,16 @@ def run_mobilenetv2_experiment(
         return result
 
 
+def run_mobilenetv2_experiment(
+    project_root: Path,
+    run_cfg: MobileNetRunConfig,
+    experiment_config_path: Path | None = None,
+) -> dict[str, Any]:
+    """Backward-compatible wrapper for existing MobileNetV2 workflow calls."""
+
+    return run_transfer_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=experiment_config_path)
+
+
 def run_mobilenetv2_experiment_from_config(
     project_root: Path,
     config_path: Path,
@@ -523,7 +630,7 @@ def run_mobilenetv2_experiment_from_config(
 
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     run_cfg = _from_experiment_dict(raw)
-    return run_mobilenetv2_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=config_path)
+    return run_transfer_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=config_path)
 
 
 def run_baseline_training(project_root: Path) -> dict[str, Any]:
@@ -532,7 +639,7 @@ def run_baseline_training(project_root: Path) -> dict[str, Any]:
     data_cfg = load_data_pipeline_config(project_root)
     mlflow_cfg = load_mlflow_config(project_root)
     run_cfg = _from_legacy_baseline(project_root, data_cfg, mlflow_tags=mlflow_cfg.tags)
-    return run_mobilenetv2_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=None)
+    return run_transfer_experiment(project_root=project_root, run_cfg=run_cfg, experiment_config_path=None)
 
 
 def main() -> None:

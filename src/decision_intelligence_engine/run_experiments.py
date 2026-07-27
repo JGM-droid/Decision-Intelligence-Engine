@@ -1,4 +1,4 @@
-"""CLI runner for controlled MobileNetV2 experiment matrix."""
+"""CLI runner for controlled experiment configurations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from .baseline_training import run_mobilenetv2_experiment
+from .baseline_training import run_transfer_experiment
 from .experiment_config import (
     get_experiment_by_id,
     load_experiment_configs_with_paths,
@@ -19,7 +19,7 @@ from .experiment_config import (
 from .mlflow_config import load_mlflow_config
 
 
-def _find_completed_run_ids(project_root: Path, experiment_ids: list[str]) -> set[str]:
+def _find_completed_run_ids(project_root: Path, experiments: list[tuple[str, str]]) -> set[str]:
     mlflow_cfg = load_mlflow_config(project_root)
     tracking_uri = mlflow_cfg.tracking_uri(project_root)
     mlflow.set_tracking_uri(tracking_uri)
@@ -29,13 +29,13 @@ def _find_completed_run_ids(project_root: Path, experiment_ids: list[str]) -> se
         return set()
 
     completed: set[str] = set()
-    for exp_id in experiment_ids:
+    for exp_id, phase in experiments:
         runs = client.search_runs(
             [experiment.experiment_id],
             filter_string=(
                 "attributes.status = 'FINISHED' "
                 f"and tags.experiment_id = '{exp_id}' "
-                "and tags.phase = '4B'"
+                f"and tags.phase = '{phase}'"
             ),
             order_by=["attributes.start_time DESC"],
             max_results=1,
@@ -57,7 +57,7 @@ def _to_summary(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run controlled MobileNetV2 experiment matrix")
+    parser = argparse.ArgumentParser(description="Run controlled experiment configurations")
     parser.add_argument("--list", action="store_true", help="List available experiment configs")
     parser.add_argument("--experiment", type=str, help="Run one experiment by experiment_id")
     parser.add_argument("--all", action="store_true", help="Run all approved experiments")
@@ -65,7 +65,7 @@ def main() -> None:
     parser.add_argument(
         "--skip-completed",
         action="store_true",
-        help="When running --all, skip experiments that already have a FINISHED Phase 4B run",
+        help="When running --all, skip experiments that already have a FINISHED run for their configured phase",
     )
     parser.add_argument("--dry-run", action="store_true", help="Show execution plan without training")
 
@@ -102,7 +102,10 @@ def main() -> None:
 
     selected = [get_experiment_by_id(configs, args.experiment)] if args.experiment else list(configs)
     if args.skip_completed and args.all:
-        completed = _find_completed_run_ids(project_root, [cfg.experiment_id for cfg in selected])
+        completed = _find_completed_run_ids(
+            project_root,
+            [(cfg.experiment_id, cfg.mlflow_tags.get("phase", "4B")) for cfg in selected],
+        )
         selected = [cfg for cfg in selected if cfg.experiment_id not in completed]
 
     if args.dry_run:
@@ -120,7 +123,7 @@ def main() -> None:
 
     results = []
     for cfg in sorted(selected, key=lambda item: item.order):
-        result = run_mobilenetv2_experiment(
+        result = run_transfer_experiment(
             project_root=project_root,
             run_cfg=cfg,
             experiment_config_path=path_by_id[cfg.experiment_id],
