@@ -45,6 +45,7 @@
 - Implement confidence-aware explanation rules and caveat policy.
 - Add handling for uncertain/ambiguous/out-of-scope responses.
 - Validate secure API-key usage via environment variables only.
+- Phase 5B complete: classifier inference and OpenAI explanation are implemented as separate modules with CLI access.
 
 ## Phase 7 - Streamlit Interface
 

@@ -6,6 +6,8 @@ from .data_pipeline import (
 	inspect_dataset_batch,
 	inspect_label_range,
 )
+from .llm_explainer import OpenAIExplainer
+from .model_inference import ModelInferenceService, PredictionResult
 from .experiment_config import (
 	ExperimentConfig,
 	MobileNetExperimentConfig,
@@ -19,7 +21,10 @@ __all__ = [
 	"DataPipelineConfig",
 	"DatasetBundle",
 	"ExperimentConfig",
+	"ModelInferenceService",
 	"MobileNetExperimentConfig",
+	"OpenAIExplainer",
+	"PredictionResult",
 	"build_cifar10_datasets",
 	"MlflowConfig",
 	"inspect_dataset_batch",

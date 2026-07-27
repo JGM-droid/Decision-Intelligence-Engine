@@ -21,6 +21,12 @@ The system has two tightly coupled layers:
 - Predictive layer: image preprocessing + CNN inference for class probabilities.
 - Interaction layer: user input handling + LLM explanation generation using model outputs and confidence context.
 
+Phase 5B implementation keeps these layers separate in code:
+
+- `model_inference.py`: artifact resolution, image validation, preprocessing, and EfficientNetB0 inference
+- `llm_explainer.py`: prompt construction and OpenAI Responses API interaction
+- `explain_image.py`: CLI orchestration only
+
 Current selected predictive model after Phase 5A:
 
 - EfficientNetB0 with ImageNet weights
@@ -111,6 +117,19 @@ Raw CIFAR-10 -> Preprocessing Pipeline -> CNN Training -> Evaluation -> MLflow -
 5. Build explanation payload (class name, confidence, alternatives).
 6. Generate LLM explanation and return structured response.
 
+Supported CIFAR-10 classes for inference and explanation:
+
+- airplane
+- automobile
+- bird
+- cat
+- deer
+- dog
+- frog
+- horse
+- ship
+- truck
+
 ## Model Training Workflow
 
 1. Baseline CNN setup with fixed seed and reproducible split strategy.
@@ -130,6 +149,11 @@ Raw CIFAR-10 -> Preprocessing Pipeline -> CNN Training -> Evaluation -> MLflow -
    - ambiguous top classes -> present alternatives
 5. Send compact prediction context to LLM.
 6. Return user-facing explanation with caveats.
+
+Classifier-only mode:
+
+- The CLI can skip OpenAI with `--no-llm`.
+- This mode is used for local verification, offline testing, and environments without `OPENAI_API_KEY`.
 
 ## MLflow Integration Points
 
@@ -173,6 +197,12 @@ Raw CIFAR-10 -> Preprocessing Pipeline -> CNN Training -> Evaluation -> MLflow -
   - always return deterministic prediction summary even if LLM fails
   - provide plain, non-LLM template explanation on LLM failure
   - log errors for debugging and postmortem analysis
+
+Phase 5B CLI behavior:
+
+- classifier-only mode succeeds without an API key
+- explanation mode returns clear user-facing errors for missing API key, API failure, timeout, or malformed response
+- missing or vague questions fall back to a deterministic default prompt
 
 ## Future Scalability Considerations
 
