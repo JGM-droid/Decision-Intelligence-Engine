@@ -47,9 +47,9 @@
 - Validate secure API-key usage via environment variables only.
 - Phase 5B complete: classifier inference and OpenAI explanation are implemented as separate modules with CLI access.
 
-## Phase 7 - Streamlit Interface
+## Phase 7 - Command-Line Interface
 
-- Build image upload and prediction display workflow.
+- Build image path and prediction display workflow.
 - Surface class prediction, confidence, and explanation text.
 - Add clear UX for invalid input and recovery guidance.
 - Ensure reproducible local run instructions for reviewers.

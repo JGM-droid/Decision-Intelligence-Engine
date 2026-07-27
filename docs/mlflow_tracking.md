@@ -32,6 +32,7 @@ Phase 4B and Phase 5A runs additionally log:
 - run-level reproducibility tags
 - environment version metadata
 - experiment config artifacts from `configs/experiments/`
+- the authoritative baseline training config from `configs/baseline_training.yaml` when present, with JSON retained only for legacy compatibility
 - architecture-required input/preprocessing evidence when architecture differs from MobileNetV2
 
 ## Current Status

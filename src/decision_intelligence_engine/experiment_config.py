@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from .pipeline_config import DataPipelineConfig, load_data_pipeline_config
 
 
@@ -183,8 +185,14 @@ def get_experiment_by_id(configs: list[ExperimentConfig], experiment_id: str) ->
 
 
 def _load_baseline_training_raw(project_root: Path) -> dict[str, Any]:
-    path = project_root / "configs" / "baseline_training.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    yaml_path = project_root / "configs" / "baseline_training.yaml"
+    json_path = project_root / "configs" / "baseline_training.json"
+    if yaml_path.exists():
+        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"Baseline training YAML must contain a mapping: {yaml_path}")
+        return dict(data)
+    return json.loads(json_path.read_text(encoding="utf-8"))
 
 
 def _baseline_control_keys(train_raw: dict[str, Any], data_cfg: DataPipelineConfig) -> dict[str, Any]:

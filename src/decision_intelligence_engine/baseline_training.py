@@ -18,6 +18,7 @@ import mlflow
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
+import yaml
 
 from .data_pipeline import build_cifar10_datasets
 from .mlflow_config import load_mlflow_config
@@ -53,6 +54,26 @@ class BaselineTrainingConfig:
             raise ValueError("learning_rate must be > 0.")
         if self.epochs <= 0:
             raise ValueError("epochs must be > 0.")
+
+
+BASELINE_TRAINING_REQUIRED_KEYS = (
+    "model_name",
+    "num_classes",
+    "dropout_rate",
+    "learning_rate",
+    "epochs",
+    "steps_per_epoch",
+    "validation_steps",
+    "evaluate_train_steps",
+    "evaluate_val_steps",
+    "evaluate_test_steps",
+    "report_test_steps",
+    "model_output_dir",
+    "report_output_dir",
+    "random_seed",
+)
+
+BASELINE_TRAINING_ALLOWED_KEYS = set(BaselineTrainingConfig.__dataclass_fields__.keys())
 
 
 @dataclass(frozen=True)
@@ -117,14 +138,96 @@ def _default_preprocessing_function(backbone: str) -> str:
     return "mobilenetv2_rescale_neg1_to_1"
 
 
-def load_baseline_training_config(project_root: Path, path: Path | None = None) -> BaselineTrainingConfig:
-    """Load legacy baseline training config from JSON."""
+def _load_json_mapping(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
-    cfg_path = path or (project_root / "configs" / "baseline_training.json")
-    if not cfg_path.exists():
-        return BaselineTrainingConfig()
-    data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    return BaselineTrainingConfig(**data)
+
+def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Malformed YAML baseline config: {path}") from exc
+    if data is None or not isinstance(data, dict):
+        raise ValueError(f"Baseline training YAML must contain a mapping: {path}")
+    return dict(data)
+
+
+def _coerce_int(value: Any, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError(f"{field_name} must be an integer.")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be an integer.") from exc
+
+
+def _coerce_float(value: Any, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError(f"{field_name} must be a number.")
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a number.") from exc
+
+
+def _coerce_optional_int(value: Any, field_name: str) -> int | None:
+    if value is None:
+        return None
+    return _coerce_int(value, field_name)
+
+
+def _load_strict_yaml_baseline_config(path: Path) -> BaselineTrainingConfig:
+    data = _load_yaml_mapping(path)
+    missing = [key for key in BASELINE_TRAINING_REQUIRED_KEYS if key not in data]
+    if missing:
+        raise ValueError(f"Missing required baseline training config fields: {', '.join(missing)}")
+
+    unexpected = [key for key in data if key not in BASELINE_TRAINING_ALLOWED_KEYS]
+    if unexpected:
+        raise ValueError(f"Unsupported baseline training config fields: {', '.join(unexpected)}")
+
+    normalized = {
+        "model_name": str(data["model_name"]),
+        "num_classes": _coerce_int(data["num_classes"], "num_classes"),
+        "dropout_rate": _coerce_float(data["dropout_rate"], "dropout_rate"),
+        "learning_rate": _coerce_float(data["learning_rate"], "learning_rate"),
+        "epochs": _coerce_int(data["epochs"], "epochs"),
+        "steps_per_epoch": _coerce_optional_int(data["steps_per_epoch"], "steps_per_epoch"),
+        "validation_steps": _coerce_optional_int(data["validation_steps"], "validation_steps"),
+        "evaluate_train_steps": _coerce_optional_int(data["evaluate_train_steps"], "evaluate_train_steps"),
+        "evaluate_val_steps": _coerce_optional_int(data["evaluate_val_steps"], "evaluate_val_steps"),
+        "evaluate_test_steps": _coerce_optional_int(data["evaluate_test_steps"], "evaluate_test_steps"),
+        "report_test_steps": _coerce_optional_int(data["report_test_steps"], "report_test_steps"),
+        "model_output_dir": str(data["model_output_dir"]),
+        "report_output_dir": str(data["report_output_dir"]),
+        "random_seed": _coerce_int(data["random_seed"], "random_seed"),
+    }
+    return BaselineTrainingConfig(**normalized)
+
+
+def load_baseline_training_config(project_root: Path, path: Path | None = None) -> BaselineTrainingConfig:
+    """Load the authoritative baseline training config.
+
+    YAML is the preferred, strict format. JSON remains as a compatibility fallback for
+    older artifacts and focused tests that still write the legacy file.
+    """
+
+    if path is not None:
+        if path.suffix.lower() in {".yaml", ".yml"}:
+            return _load_strict_yaml_baseline_config(path)
+        if path.suffix.lower() == ".json":
+            return BaselineTrainingConfig(**_load_json_mapping(path))
+        if not path.exists():
+            return BaselineTrainingConfig()
+        raise ValueError(f"Unsupported baseline training config format: {path.suffix}")
+
+    yaml_path = project_root / "configs" / "baseline_training.yaml"
+    json_path = project_root / "configs" / "baseline_training.json"
+    if yaml_path.exists():
+        return _load_strict_yaml_baseline_config(yaml_path)
+    if json_path.exists():
+        return BaselineTrainingConfig(**_load_json_mapping(json_path))
+    return BaselineTrainingConfig()
 
 
 def _set_reproducibility(seed: int) -> None:
@@ -604,7 +707,10 @@ def run_transfer_experiment(
         mlflow.log_artifact(str(cls_report_path), artifact_path="reports")
         mlflow.log_artifact(str(cm_image_path), artifact_path="reports")
         mlflow.log_artifact(str(history_plot_path), artifact_path="reports")
-        mlflow.log_artifact(str(project_root / "configs" / "baseline_training.json"), artifact_path="configs")
+        baseline_config_path = project_root / "configs" / "baseline_training.yaml"
+        if not baseline_config_path.exists():
+            baseline_config_path = project_root / "configs" / "baseline_training.json"
+        mlflow.log_artifact(str(baseline_config_path), artifact_path="configs")
         mlflow.log_artifact(str(project_root / "configs" / "data_pipeline.json"), artifact_path="configs")
         if experiment_config_path is not None and experiment_config_path.exists():
             mlflow.log_artifact(str(experiment_config_path), artifact_path="configs")

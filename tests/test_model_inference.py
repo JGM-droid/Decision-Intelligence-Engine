@@ -228,7 +228,7 @@ def test_missing_model_artifact_raises_clear_error(tmp_path: Path, monkeypatch: 
 
     monkeypatch.setattr("src.decision_intelligence_engine.model_inference.MlflowClient", lambda tracking_uri=None: FakeClient())
 
-    with pytest.raises(ModelResolutionError, match="No \.keras model artifact found"):
+    with pytest.raises(ModelResolutionError, match=r"No \.keras model artifact found"):
         resolve_selected_model_artifact(tmp_path)
 
 

@@ -15,6 +15,7 @@ from mlflow.entities import Run
 from mlflow.tracking import MlflowClient
 
 from .mlflow_config import load_mlflow_config
+from .metric_utils import compute_multiclass_metrics_from_confusion_matrix, load_confusion_matrix_csv
 
 
 REQUIRED_METRICS = {
@@ -88,6 +89,9 @@ class ArchitectureComparisonRow:
     train_accuracy: float | None
     validation_accuracy: float | None
     test_accuracy: float | None
+    test_macro_precision: float | None
+    test_macro_recall: float | None
+    test_macro_f1: float | None
     train_loss: float | None
     validation_loss: float | None
     test_loss: float | None
@@ -135,6 +139,23 @@ def _list_artifact_paths(client: MlflowClient, run_id: str, prefix: str = "") ->
         else:
             rows.append(item.path)
     return sorted(rows)
+
+
+def _download_artifact_file(run_id: str, artifact_path: str) -> Path:
+    return Path(mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=artifact_path))
+
+
+def _load_test_macro_metrics(run: Run, artifact_paths: list[str]) -> tuple[float, float, float, float]:
+    confusion_paths = [path for path in artifact_paths if path.startswith("reports/") and path.endswith("_confusion_matrix.csv")]
+    if not confusion_paths:
+        raise ValueError(f"Missing confusion matrix artifact for run {run.info.run_id}")
+    confusion_path = _download_artifact_file(run.info.run_id, confusion_paths[0])
+    try:
+        matrix = load_confusion_matrix_csv(confusion_path)
+        metrics = compute_multiclass_metrics_from_confusion_matrix(matrix)
+        return metrics.accuracy, metrics.macro_precision, metrics.macro_recall, metrics.macro_f1
+    except ValueError:
+        return 0.0, 0.0, 0.0, 0.0
 
 
 def _fetch_runs_by_experiment_id(client: MlflowClient, mlflow_experiment_id: str, experiment_id: str) -> list[Run]:
@@ -188,10 +209,12 @@ def _evaluate_quality_gates(run: Run, approved_ids: set[str], artifact_paths: li
         notes.append("unexpected_split_strategy")
 
     required_artifacts = {
-        "configs/baseline_training.json",
         "configs/data_pipeline.json",
     }
     has_model = any(path.startswith("model/") and path.endswith(".keras") for path in artifact_paths)
+    has_baseline_config = any(
+        path in {"configs/baseline_training.yaml", "configs/baseline_training.json"} for path in artifact_paths
+    )
     has_reports = {
         "confusion_csv": any(path.startswith("reports/") and path.endswith("_confusion_matrix.csv") for path in artifact_paths),
         "confusion_png": any(path.startswith("reports/") and path.endswith("_confusion_matrix.png") for path in artifact_paths),
@@ -202,6 +225,8 @@ def _evaluate_quality_gates(run: Run, approved_ids: set[str], artifact_paths: li
 
     if not has_model:
         notes.append("missing_model_artifact")
+    if not has_baseline_config:
+        notes.append("missing_baseline_training_config")
     for label, present in has_reports.items():
         if not present:
             notes.append(f"missing_{label}")
@@ -427,7 +452,7 @@ def _evaluate_architecture_quality_gates(run: Run, artifact_paths: list[str]) ->
     )
 
 
-def _architecture_row_from_run(run: Run, comparison_limitations: str) -> ArchitectureComparisonRow:
+def _architecture_row_from_run(client: MlflowClient, run: Run, comparison_limitations: str) -> ArchitectureComparisonRow:
     metrics = run.data.metrics
     params = run.data.params
     tags = run.data.tags
@@ -446,6 +471,11 @@ def _architecture_row_from_run(run: Run, comparison_limitations: str) -> Archite
     train_acc = _safe_float(metrics.get("eval.train_accuracy"))
     val_acc = _safe_float(metrics.get("eval.val_accuracy"))
 
+    artifact_paths = _list_artifact_paths(client, run.info.run_id)
+    # The runtime MLflow client above is only used for artifact discovery; the metrics come from the
+    # saved confusion matrix so the published summary reflects post-hoc test-set evaluation.
+    test_metrics = _load_test_macro_metrics(run, artifact_paths)
+
     return ArchitectureComparisonRow(
         architecture=architecture,
         experiment_id=tags.get("experiment_id", "unknown"),
@@ -460,6 +490,9 @@ def _architecture_row_from_run(run: Run, comparison_limitations: str) -> Archite
         train_accuracy=train_acc,
         validation_accuracy=val_acc,
         test_accuracy=_safe_float(metrics.get("eval.test_accuracy")),
+        test_macro_precision=test_metrics[1],
+        test_macro_recall=test_metrics[2],
+        test_macro_f1=test_metrics[3],
         train_loss=_safe_float(metrics.get("eval.train_loss")),
         validation_loss=_safe_float(metrics.get("eval.val_loss")),
         test_loss=_safe_float(metrics.get("eval.test_loss")),
@@ -494,6 +527,9 @@ def _inject_quality_results(row: ArchitectureComparisonRow, quality: str, reload
         train_accuracy=row.train_accuracy,
         validation_accuracy=row.validation_accuracy,
         test_accuracy=row.test_accuracy,
+        test_macro_precision=row.test_macro_precision,
+        test_macro_recall=row.test_macro_recall,
+        test_macro_f1=row.test_macro_f1,
         train_loss=row.train_loss,
         validation_loss=row.validation_loss,
         test_loss=row.test_loss,
@@ -616,9 +652,9 @@ def compare_architecture_runs(
     limitations: list[str] = []
 
     if len(selected_runs) == len(expected_ids):
-        mobile_row = _architecture_row_from_run(selected_runs[mobile_experiment_id], comparison_limitations="")
-        mobile_96_row = _architecture_row_from_run(selected_runs[mobile_96_experiment_id], comparison_limitations="")
-        efficient_row = _architecture_row_from_run(selected_runs[efficientnet_experiment_id], comparison_limitations="")
+        mobile_row = _architecture_row_from_run(client, selected_runs[mobile_experiment_id], comparison_limitations="")
+        mobile_96_row = _architecture_row_from_run(client, selected_runs[mobile_96_experiment_id], comparison_limitations="")
+        efficient_row = _architecture_row_from_run(client, selected_runs[efficientnet_experiment_id], comparison_limitations="")
 
         if len({mobile_row.input_resolution, mobile_96_row.input_resolution, efficient_row.input_resolution}) > 1:
             limitations.append(
@@ -739,13 +775,14 @@ def _write_architecture_reports(project_root: Path, payload: dict[str, Any]) -> 
         f"- Tracking URI: {payload['tracking_uri']}",
         f"- Decision: {payload['decision']['decision']}",
         f"- Reason: {payload['decision']['reason']}",
+        "- Macro precision/recall/F1 are post-hoc calculations from the saved test confusion matrices, not original MLflow logged metrics.",
         "",
-        "| Architecture | Experiment ID | Run ID | Input Resolution | Preprocessing | Val Acc | Test Acc | Val Loss | Test Loss | Duration Sec | Trainable Params | Frozen Params | Eligibility | Notes |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Architecture | Experiment ID | Run ID | Input Resolution | Preprocessing | Val Acc | Test Acc | Macro Precision | Macro Recall | Macro F1 | Val Loss | Test Loss | Duration Sec | Trainable Params | Frozen Params | Eligibility | Notes |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         md_lines.append(
-            "| {architecture} | {experiment_id} | {run_id} | {input_resolution} | {preprocessing} | {validation_accuracy} | {test_accuracy} | {validation_loss} | {test_loss} | {duration_sec} | {trainable_params} | {frozen_params} | {selection_eligibility} | {notes} |".format(
+            "| {architecture} | {experiment_id} | {run_id} | {input_resolution} | {preprocessing} | {validation_accuracy} | {test_accuracy} | {test_macro_precision} | {test_macro_recall} | {test_macro_f1} | {validation_loss} | {test_loss} | {duration_sec} | {trainable_params} | {frozen_params} | {selection_eligibility} | {notes} |".format(
                 **row
             )
         )

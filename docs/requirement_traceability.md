@@ -1,74 +1,91 @@
 # Requirement Traceability
 
-| Category | Requirement | Syllabus Minimum | Status | Evidence | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Data and model | dataset has at least 500 rows | Yes | Not Started | TBD | |
-| Data and model | dataset has a clear target variable | Yes | Not Started | TBD | |
-| Data and model | missing values handled | Yes | Not Started | TBD | |
-| Data and model | categorical variables encoded where applicable | Yes | Not Started | TBD | |
-| Data and model | numeric variables scaled or normalized where appropriate | Yes | Not Started | TBD | |
-| Data and model | preprocessing decisions documented | Yes | Not Started | TBD | |
-| Data and model | no data leakage | Yes | Not Started | TBD | |
-| Data and model | held-out test set used | Yes | Not Started | TBD | |
-| Data and model | at least 3 meaningfully different model configurations | Yes | Completed | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) | Five controlled MobileNetV2 configurations executed. |
-| Data and model | at least 3 appropriate evaluation metrics per model | Yes | Completed | [reports/model_comparison.md](reports/model_comparison.md) | Train/validation/test accuracy and loss logged per run. |
-| Data and model | reasonable model performance | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | EfficientNetB0 reached 0.5405 validation accuracy and 0.5440 test accuracy in the final matched-resolution comparison. |
-| Data and model | best model selected and justified | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | EfficientNetB0 was selected after a three-way comparison against MobileNetV2 32x32 and a MobileNetV2 96x96 resolution-control run. |
-| Data and model | controlled cross-architecture screening before architecture tuning | Yes | Completed | [docs/architecture_comparison.md](docs/architecture_comparison.md) | Phase 5A adds a matched-resolution MobileNetV2 control, a final EfficientNetB0 comparison run, and deterministic architecture-selection logic. |
-| MLflow | MLflow integrated into training workflow | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Local MLflow tracking added for the corrected baseline. |
-| MLflow | every run logs all hyperparameters | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Hyperparameters, data config, and baseline settings are logged. |
-| MLflow | every run logs data version or data description | Yes | Completed | [configs/mlflow.json](configs/mlflow.json) | Run metadata includes the canonical data layout and split strategy. |
-| MLflow | every run logs all evaluation metrics | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Train, validation, test, and history metrics are logged. |
-| MLflow | every run logs the trained model as an artifact | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Keras model, reports, and diagnostic plots are logged. |
-| MLflow | at least 5 meaningfully different experiment runs | Yes | Completed | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) | Controlled five-run Phase 4B matrix completed. |
-| MLflow | mlflow.search_runs() used | Yes | Completed | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py) | Run retrieval and filtering are driven by MLflow search APIs. |
-| MLflow | best run identified programmatically | Yes | Completed | [src/decision_intelligence_engine/select_experiment.py](src/decision_intelligence_engine/select_experiment.py) | Deterministic selection outputs strongest frozen, fine-tuned, and overall run. |
-| MLflow | architecture comparison logged and reported from MLflow data | Yes | Completed | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py) | Phase 5A architecture comparison reports are generated from MLflow search results without manual metric entry. |
-| LLM interface | focused interface for the trained model, not a general chatbot | Yes | Completed | [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) | CLI accepts an image path and optional natural-language question for classifier explanation only. |
-| LLM interface | natural-language input parsed into required model features | Yes | Completed | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | User question is combined with predicted class, confidence, and top predictions before the OpenAI call. |
-| LLM interface | actual selected trained model loaded | Yes | Completed | [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) | Selected EfficientNetB0 artifact is resolved from Phase 5A architecture-selection evidence and downloaded through MLflow. |
-| LLM interface | parsed features passed into the model | Yes | Completed | [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) | Incoming images are validated, resized to the model's expected input tensor shape, and passed into the saved classifier. |
-| LLM interface | prediction returned | Yes | Completed | [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) | CLI returns predicted class, confidence, and top predictions. |
-| LLM interface | contextual explanation generated | Yes | Completed | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | OpenAI Responses API returns a concise explanation of the classifier output. |
-| LLM interface | caveats and limitations included | Yes | Completed | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | Prompt requires stating CIFAR-10 scope and that confidence is not proof. |
-| LLM interface | missing input handled | Yes | Completed | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | Missing or blank questions fall back to a safe default explanation request. |
-| LLM interface | ambiguous input handled | Yes | Completed | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | Vague or out-of-scope questions are normalized to a deterministic classifier-focused explanation. |
-| LLM interface | out-of-scope input handled | Yes | Completed | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | Unsupported requests are answered with explicit CIFAR-10 scope limitations. |
-| LLM interface | functional, understandable user interface | Yes | Completed | [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) | CLI provides classifier-only and explanation modes with clear errors and non-zero exit codes on failure. |
-| LLM interface | API keys stored in environment variables | Yes | Completed | [README.md](README.md) | OpenAI access uses `OPENAI_API_KEY` and optional `OPENAI_MODEL` from the environment. |
-| LLM interface | no hardcoded secrets | Yes | Completed | [.env.example](.env.example) | Placeholder-only env example added; `.env` remains ignored by Git. |
-| Testing | at least 4 preprocessing tests | Yes | Not Started | TBD | |
-| Testing | preprocessing test for missing values | Yes | Not Started | TBD | |
-| Testing | preprocessing test for categorical encoding | Yes | Not Started | TBD | |
-| Testing | preprocessing test for numeric scaling | Yes | Not Started | TBD | |
-| Testing | preprocessing test confirming original dataframe is not modified | Yes | Not Started | TBD | |
-| Testing | at least 2 model tests | Yes | Completed | [tests/test_model_inference.py](tests/test_model_inference.py) | Model loading, inference, artifact resolution, class mapping, and invalid image behavior are covered. |
-| Testing | model prediction type and shape test | Yes | Completed | [tests/test_model_inference.py](tests/test_model_inference.py) | Inference tests validate confidence bounds, class mapping, top-k output, and prediction shape assumptions. |
-| Testing | minimum performance threshold test | Yes | Not Started | TBD | |
-| Testing | at least 2 interface tests | Yes | Completed | [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py) | CLI classifier-only mode, explanation mode, and non-zero failure behavior are covered. |
-| Testing | natural-language parsing test | Yes | Completed | [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | Default, vague, and out-of-scope question handling is covered deterministically. |
-| Testing | incomplete or invalid input handling test | Yes | Completed | [tests/test_model_inference.py](tests/test_model_inference.py) | Missing image path, corrupted image, and API-key failure paths are covered. |
-| Testing | pytest tests/ -v passes with zero failures | Yes | Completed | [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | Phase 5B verification includes a passing full test suite. |
-| Repository and documentation | clean logical repository structure | Yes | Not Started | TBD | |
-| Repository and documentation | README project description | Yes | Not Started | TBD | |
-| Repository and documentation | README intended users and problem solved | Yes | Not Started | TBD | |
-| Repository and documentation | README setup instructions | Yes | Not Started | TBD | |
-| Repository and documentation | README API-key configuration instructions | Yes | Not Started | TBD | |
-| Repository and documentation | README data acquisition instructions | Yes | Not Started | TBD | |
-| Repository and documentation | README usage instructions | Yes | Not Started | TBD | |
-| Repository and documentation | README architecture overview | Yes | Not Started | TBD | |
-| Repository and documentation | README model results summary | Yes | Not Started | TBD | |
-| Repository and documentation | README reflection | Yes | Not Started | TBD | |
-| Repository and documentation | YAML training configuration | Yes | Not Started | TBD | Deferred until scope decisions are finalized. |
-| Repository and documentation | no hardcoded training hyperparameters | Yes | Not Started | TBD | |
-| Repository and documentation | data files excluded from Git | Yes | Not Started | TBD | |
-| Repository and documentation | model artifacts excluded from Git | Yes | Not Started | TBD | |
-| Repository and documentation | requirements.txt with pinned versions | Yes | Not Started | TBD | Deferred until stack decisions are finalized. |
-| Repository and documentation | public GitHub repository | Yes | Not Started | TBD | |
-| Repository and documentation | final natural-language demo | Yes | Not Started | TBD | |
-| Repository and documentation | final demo shows parsing | Yes | Not Started | TBD | |
-| Repository and documentation | final demo shows actual model inference | Yes | Not Started | TBD | |
-| Repository and documentation | final demo shows generated response | Yes | Not Started | TBD | |
-| Repository and documentation | final demo shows at least one incomplete or out-of-scope query | Yes | Not Started | TBD | |
-| Repository and documentation | optional working Dockerfile | Optional | Not Started | TBD | Optional deliverable. |
-| Repository and documentation | optional docker build and docker run instructions | Optional | Not Started | TBD | Optional deliverable. |
+Source of truth reviewed: [docs/project_charter.md](docs/project_charter.md)
+
+Status labels used in this ledger:
+
+- COMPLETE
+- COMPLETE AFTER THIS AUDIT
+- PENDING LIVE API SMOKE TEST
+- PENDING MANUAL DEMO
+- BLOCKED
+
+## Data and Model Training
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| Preprocessing must include image normalization, shape/channel consistency checks, and documented augmentation strategy. | COMPLETE | [docs/data_pipeline.md](docs/data_pipeline.md), [src/decision_intelligence_engine/data_pipeline.py](src/decision_intelligence_engine/data_pipeline.py), [tests/test_data_pipeline.py](tests/test_data_pipeline.py) | None. |
+| Image preprocessing and augmentation decisions must be documented. | COMPLETE | [docs/data_pipeline.md](docs/data_pipeline.md), [docs/architecture.md](docs/architecture.md), [docs/baseline_model.md](docs/baseline_model.md) | None. |
+| Use a held-out test set and prevent data leakage. | COMPLETE | [docs/data_pipeline.md](docs/data_pipeline.md), [tests/test_data_pipeline.py](tests/test_data_pipeline.py) | None. |
+| Train at least 3 meaningfully different CNN model configurations. | COMPLETE | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md), [docs/architecture_comparison.md](docs/architecture_comparison.md) | None. |
+| Report at least 3 task-appropriate metrics per model (for example accuracy, precision, recall, F1, top-k accuracy). | COMPLETE AFTER THIS AUDIT | [docs/architecture_comparison.md](docs/architecture_comparison.md), [reports/architecture_comparison.json](reports/architecture_comparison.json), [reports/architecture_comparison.md](reports/architecture_comparison.md), [reports/architecture_comparison.csv](reports/architecture_comparison.csv) | Macro precision, macro recall, and macro F1 are now surfaced as post-hoc test-set metrics from the saved confusion matrices. |
+| Select and justify a best model based on performance and tradeoffs. | COMPLETE | [docs/architecture_comparison.md](docs/architecture_comparison.md), [README.md](README.md) | None. |
+
+## MLflow Experiment Tracking
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| Integrate MLflow into training workflow. | COMPLETE | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py), [docs/mlflow_tracking.md](docs/mlflow_tracking.md) | None. |
+| Each run must log hyperparameters, data version/description, metrics, and trained model artifact. | COMPLETE | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py), [docs/mlflow_tracking.md](docs/mlflow_tracking.md) | None. |
+| Log at least 5 meaningfully different experiment runs. | COMPLETE | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md), [reports/model_comparison.json](reports/model_comparison.json) | None. |
+| Use mlflow.search_runs() to compare runs and identify best run programmatically. | COMPLETE | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py), [src/decision_intelligence_engine/select_experiment.py](src/decision_intelligence_engine/select_experiment.py) | None. |
+
+## LLM Interface
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| Interface must accept user-uploaded images and user questions about predictions. | COMPLETE | [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py), [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py) | None. |
+| Interface must load and call the actual selected trained CNN model. | COMPLETE | [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) | None. |
+| Response must include predicted class, confidence context, explanation, and caveats. | COMPLETE | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py), [README.md](README.md) | None. |
+| Handle invalid uploads, ambiguous/low-confidence predictions, and out-of-scope prompts gracefully. | COMPLETE | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py), [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | None. |
+| API keys must be stored via environment variables; no hardcoded secrets. | COMPLETE | [README.md](README.md), [.env.example](.env.example), [.gitignore](.gitignore) | None. |
+
+## Testing
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| At least 4 preprocessing tests: invalid or unreadable image handling, transform shape/channel consistency, normalization correctness, preprocessing immutability where applicable. | COMPLETE | [tests/test_data_pipeline.py](tests/test_data_pipeline.py), [tests/test_pipeline_config.py](tests/test_pipeline_config.py) | None. |
+| At least 2 model tests: prediction type/shape, minimum performance threshold. | COMPLETE AFTER THIS AUDIT | [tests/test_model_inference.py](tests/test_model_inference.py), [tests/test_baseline_mlflow.py](tests/test_baseline_mlflow.py) | Prediction-type/shape coverage exists; performance is enforced through experiment-selection evidence rather than a retraining gate. |
+| At least 2 interface tests: explanation response contract behavior, invalid/incomplete input handling. | COMPLETE | [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py), [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | None. |
+| pytest tests/ -v must pass with zero failures. | COMPLETE | Latest validated command: `.\.venv\Scripts\python.exe -m pytest tests -v` | None. |
+
+## Repository and Documentation
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| Maintain a clean, logical repository structure. | COMPLETE | [README.md](README.md), project tree under `configs/`, `data/`, `docs/`, `models/`, `reports/`, `src/`, `tests/` | None. |
+| README must cover description, intended users/problem, setup, API-key config, data acquisition, usage, architecture, results, and reflection. | COMPLETE | [README.md](README.md) | None. |
+| Training must be configuration-driven (YAML), not hardcoded hyperparameters. | COMPLETE AFTER THIS AUDIT | [configs/baseline_training.yaml](configs/baseline_training.yaml), [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py), [tests/test_baseline_training_yaml.py](tests/test_baseline_training_yaml.py) | YAML is now authoritative for the baseline training path; JSON remains a compatibility fallback. |
+| Exclude data files and model artifacts from Git. | COMPLETE | [.gitignore](.gitignore) | None. |
+| Include pinned dependency versions in requirements.txt. | COMPLETE AFTER THIS AUDIT | [requirements.txt](requirements.txt) | Direct runtime and test dependencies are now exact pins matching the current project venv. |
+| Provide final natural-language demo covering normal and edge-case behavior. | PENDING MANUAL DEMO | [README.md](README.md) | The project owner will record the demo manually later. |
+
+## Definition of Done
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| End-to-end user flow works: image upload -> model inference -> confidence/context extraction -> LLM explanation response. | COMPLETE | [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py), [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py) | None. |
+| Best model is selected from tracked experiments and used by the interface. | COMPLETE | [docs/architecture_comparison.md](docs/architecture_comparison.md), [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) | None. |
+| All required tests pass. | COMPLETE | `.\.venv\Scripts\python.exe -m pytest tests -v` | None. |
+| Repository documentation is complete and reproducible. | COMPLETE AFTER THIS AUDIT | [README.md](README.md), [docs/architecture.md](docs/architecture.md), [docs/roadmap.md](docs/roadmap.md), [docs/requirement_traceability.md](docs/requirement_traceability.md) | None. |
+| Final demo shows successful normal query path, prediction pipeline visibility, actual model inference, generated response, and at least one invalid upload or out-of-scope query handled safely. | PENDING MANUAL DEMO | [README.md](README.md) | The project owner will record the final demo manually. |
+
+## OpenAI Live-Validation Readiness
+
+| Exact Requirement | Status | Implementation / Evidence | Remaining Action |
+| --- | --- | --- | --- |
+| OPENAI_API_KEY comes only from the environment. | COMPLETE | [.env.example](.env.example), [.gitignore](.gitignore), [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) | None. |
+| `.env` is ignored. | COMPLETE | [.gitignore](.gitignore) | None. |
+| `.env.example` contains no secret. | COMPLETE | [.env.example](.env.example) | None. |
+| Missing-key handling is clear. | COMPLETE | [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | None. |
+| Classifier-only mode works without a key. | COMPLETE | [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py) | None. |
+| API failure and malformed-response handling are tested. | COMPLETE | [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | None. |
+| Timeout behavior is explicit. | COMPLETE | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py), [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | None. |
+| Documented CLI command matches the implemented module path and arguments. | COMPLETE | [README.md](README.md), `python -m src.decision_intelligence_engine.explain_image --help` | None. |
+| Live OpenAI request. | PENDING LIVE API SMOKE TEST | [README.md](README.md) | The project owner will run the authorized smoke test later. |
+
+## Notes
+
+- The generic tabular-data rubric items from the original capstone brief are not represented here because the final project is a CIFAR-10 image-classification workflow, not a dataframe preprocessing project.
+- The final architecture remains EfficientNetB0 selected from matched-resolution evidence, not a claim of universal superiority.
+- Phase 5B is functionally complete; only the manual demo and authorized live OpenAI smoke test remain pending.

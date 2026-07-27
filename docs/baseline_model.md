@@ -41,7 +41,7 @@ Model-side input adaptation for pretrained MobileNetV2 is applied with a seriali
 
 ## Hyperparameters
 
-Source: configs/baseline_training.json
+Source: configs/baseline_training.yaml (authoritative); configs/baseline_training.json remains a legacy compatibility fallback.
 
 - epochs: 1
 - steps_per_epoch: 100

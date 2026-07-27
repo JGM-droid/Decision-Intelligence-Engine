@@ -1,63 +1,155 @@
 # Decision Intelligence Engine
 
-Decision Intelligence Engine is a computer-vision decision-support project built around CIFAR-10 image classification. The current workstream uses a deterministic data pipeline, a corrected MobileNetV2 baseline, a controlled five-run MobileNetV2 experiment matrix, a MobileNetV2 96x96 resolution-control run, a matched-resolution EfficientNetB0 architecture comparison, and a Phase 5B OpenAI explanation CLI built on top of the final selected EfficientNetB0 model.
+Decision Intelligence Engine is a CIFAR-10 computer-vision project that pairs a reproducible CNN classifier with a lightweight OpenAI explanation layer. The final selected predictive model is EfficientNetB0, chosen after controlled comparison against matched MobileNetV2 baselines.
 
-## Project Description
+## Project Overview
 
-The project classifies CIFAR-10 images and surfaces those predictions through a focused explanation layer. Phase 4A added MLflow around the corrected baseline; Phase 4B added a controlled MobileNetV2 matrix; Phase 5A completed a three-way architecture comparison across MobileNetV2 32x32, MobileNetV2 96x96, and EfficientNetB0 96x96; Phase 5B adds a CLI that combines classifier inference with an OpenAI-generated explanation.
+This repository is designed to read like a release candidate: experiments are reproducible, inference uses the actual tracked model artifact, and the user-facing CLI stays separate from model training.
 
-## Intended Users and Problem
+What the project does:
 
-The project is intended for reviewers and future end users who need a simple image-classification assistant with traceable training evidence. The immediate problem is not a consumer chatbot; it is reproducible model training and experiment tracking for a narrow vision task.
+- classifies CIFAR-10 images with a frozen EfficientNetB0 model
+- explains classifier output with the OpenAI Responses API
+- records experiments and artifacts in MLflow
+- preserves a deterministic train/validation/test split
+- supports classifier-only verification with no API key
+
+## Status
+
+Phase 5B is functionally complete. The repository is now focused on release readiness, portfolio polish, and documentation clarity rather than new ML features.
+
+## Intended Users
+
+The primary audience is a recruiter, reviewer, or engineer who wants to see a disciplined ML project with clear evidence, a working CLI, and concise documentation. The project is intentionally narrow so the engineering quality is easy to inspect.
+
+## Architecture
+
+The current architecture is documented in [docs/architecture.md](docs/architecture.md). In short:
+
+- data ingestion and preprocessing are deterministic
+- model training and experiment tracking happen through the shared TensorFlow/MLflow pipeline
+- inference resolves the selected EfficientNetB0 artifact from MLflow evidence
+- OpenAI is only used to explain classifier output, not to make the prediction
+
+## Key Files
+
+- [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) - CLI entry point
+- [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) - model resolution and prediction
+- [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) - OpenAI prompt and response handling
+- [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) - shared training pipeline
+- [docs/architecture_comparison.md](docs/architecture_comparison.md) - final EfficientNetB0 selection evidence
+- [docs/requirement_traceability.md](docs/requirement_traceability.md) - evidence ledger
 
 ## Dataset
 
-The canonical dataset layout is `data/raw/cifar10/train/<class>/*.png` and `data/raw/cifar10/test/<class>/*.png`. Training, validation, and test splits are derived deterministically from the training tree, while the official test tree remains untouched.
+The canonical dataset layout is:
 
-## Setup
+```text
+data/raw/cifar10/train/<class>/*.png
+data/raw/cifar10/test/<class>/*.png
+```
 
-Install the pinned dependencies from `requirements.txt` into the project virtual environment and ensure TensorFlow can see the local CIFAR-10 files. MLflow writes to the local `mlruns/` directory, which is ignored by Git.
+Training and validation splits are derived deterministically from the training tree. The official CIFAR-10 test tree remains untouched.
 
-For Phase 5B explanation mode, set `OPENAI_API_KEY` in the environment. You may also set `OPENAI_MODEL` to override the default OpenAI model name used by the CLI.
+## Screenshots and Demo Assets
 
-## API-Key Configuration
+This repository includes representative CIFAR-10 sample images under [docs/assets/cifar10_samples](docs/assets/cifar10_samples). Suggested portfolio screenshots to add later, if desired:
 
-Set `OPENAI_API_KEY` in the environment before running explanation mode. Do not store secrets in source files, JSON configs, tests, or committed `.env` files. `.env` is ignored by Git, and `.env.example` contains placeholders only.
+- the MLflow experiment comparison page
+- a terminal capture of `python -m src.decision_intelligence_engine.explain_image --image ... --no-llm`
+- a terminal capture of the OpenAI explanation mode
+
+## Installation
+
+1. Create and activate a Python 3.11 environment.
+2. Install pinned dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+3. Ensure the CIFAR-10 folder layout exists at `data/raw/cifar10`.
+4. Confirm MLflow can write to the local `mlruns/` directory.
+
+## Environment Setup
+
+Copy `.env.example` to `.env` if you want a local template, then set:
+
+- `OPENAI_API_KEY` for explanation mode
+- `OPENAI_MODEL` if you want to override the default OpenAI model
+
+Do not commit secrets. `.env` is ignored by Git.
 
 ## Usage
 
-Run the controlled experiment matrix with the project interpreter, for example:
+Common commands:
 
 ```bash
 python -m src.decision_intelligence_engine.run_experiments --all
 python -m src.decision_intelligence_engine.compare_experiments --write-reports
 python -m src.decision_intelligence_engine.select_experiment
-python -m src.decision_intelligence_engine.run_experiments --experiment mobilenetv2_96x96_control
-python -m src.decision_intelligence_engine.run_experiments --experiment efficientnetb0_control_frozen
 python -m src.decision_intelligence_engine.compare_experiments --architecture --write-architecture-reports
 python -m src.decision_intelligence_engine.select_architecture
 python -m src.decision_intelligence_engine.explain_image --image path/to/image.png --no-llm
-python -m src.decision_intelligence_engine.explain_image --image path/to/image.png --question "What is shown in this image and how confident is the model?"
+python -m src.decision_intelligence_engine.explain_image --image path/to/image.png --question "What is shown here?"
 ```
 
-The explain-image CLI supports classifier-only verification with `--no-llm` and explanation mode through the OpenAI Responses API. The classifier remains the source of the prediction; the LLM only explains that prediction.
+The classifier remains the source of truth for the prediction. The LLM only explains the result and its caveats.
 
-## Architecture
+## Example Output
 
-The system is organized around four layers: data pipeline, model training/evaluation, experiment tracking, and an inference-to-LLM explanation layer. Model inference and OpenAI interaction are intentionally separate so classifier behavior remains testable and deterministic even when the LLM is disabled or unavailable.
+Classifier-only smoke test:
+
+```text
+Predicted class: frog
+Confidence: 40.63%
+Top predictions: frog, cat, dog
+```
+
+Explanation mode adds a short natural-language summary from OpenAI after the classifier result.
+
+## Testing
+
+Run the test suite locally with:
+
+```bash
+python -m pytest tests -v
+python -m compileall src tests
+```
+
+The repository also includes focused tests for data loading, inference, CLI behavior, and OpenAI response handling.
+
+## Project Structure
+
+```text
+configs/
+data/
+docs/
+models/
+reports/
+src/decision_intelligence_engine/
+tests/
+```
+
+## Future Roadmap
+
+Potential follow-up items that would materially improve the portfolio later:
+
+- a Streamlit front end for a richer demo experience
+- Docker packaging for one-command setup
+- a lightweight model registry or release tag workflow
+- additional observability around inference confidence and drift
 
 ## Model Results
 
-The current selected MobileNetV2 configuration is the frozen longer-training variant based on explicit validation-first criteria for Phase 4B. After the additional Phase 5A resolution-control run, EfficientNetB0 is selected as the final architecture because it still outperformed MobileNetV2 when both used 96x96 effective inputs. Phase 5B uses that finalized EfficientNetB0 artifact for inference and explanation.
+The final architecture choice is EfficientNetB0 at 96x96 resolution. The supporting comparison and MLflow evidence are summarized in [docs/architecture_comparison.md](docs/architecture_comparison.md).
 
 ## Limitations
 
-The current explanation flow only explains classifier outputs within the CIFAR-10 label space. It does not verify whether the classifier is correct, and it must not be treated as an independent vision judgment. If OpenAI is unavailable, classifier-only mode still works.
+The explanation flow only describes CIFAR-10 classifier output. It does not verify correctness, and it should not be treated as an independent visual judgment. If OpenAI is unavailable, classifier-only mode still works.
 
 ## Reflection
 
-The main lesson so far is that reproducible file-manifest splitting and serialization-safe preprocessing matter more than a quick baseline score. Local experiment tracking is now in place so later model iterations can be compared cleanly.
+The main engineering lesson from the project is that reproducibility and evidence quality matter more than chasing a quick baseline score. Input resolution turned out to be a real confounding variable, which is why the MobileNetV2 96x96 control exists and why the final architecture decision is tied to matched-resolution evidence rather than the first pair of runs.
 
-## Demo
-
-The current demonstration is the controlled experiment matrix plus the final architecture comparison outputs. Start the UI with `mlflow ui --backend-store-uri file:./mlruns` after the experiment runs.
+Another key challenge was keeping deterministic classifier behavior separate from the nondeterministic explanation layer: the model inference path is testable on its own, MLflow artifact selection is explicit, and the OpenAI call is treated as a post-prediction explanation step rather than part of the prediction itself.

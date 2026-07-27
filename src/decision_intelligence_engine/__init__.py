@@ -1,5 +1,7 @@
 """Decision Intelligence Engine package."""
 
+__version__ = "0.1.0"
+
 from .data_pipeline import (
 	DatasetBundle,
 	build_cifar10_datasets,
@@ -25,6 +27,7 @@ __all__ = [
 	"MobileNetExperimentConfig",
 	"OpenAIExplainer",
 	"PredictionResult",
+	"__version__",
 	"build_cifar10_datasets",
 	"MlflowConfig",
 	"inspect_dataset_batch",

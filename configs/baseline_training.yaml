@@ -1,0 +1,14 @@
+model_name: mobilenetv2_frozen_baseline
+num_classes: 10
+dropout_rate: 0.2
+learning_rate: 0.0003
+epochs: 1
+steps_per_epoch: 100
+validation_steps: null
+evaluate_train_steps: null
+evaluate_val_steps: null
+evaluate_test_steps: null
+report_test_steps: null
+model_output_dir: models
+report_output_dir: reports
+random_seed: 42
