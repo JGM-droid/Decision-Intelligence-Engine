@@ -1,0 +1,17 @@
+{
+  "data_root": "data/raw/cifar10",
+  "train_subdir": "train",
+  "test_subdir": "test",
+  "image_size": [32, 32],
+  "batch_size": 128,
+  "validation_split": 0.2,
+  "random_seed": 42,
+  "shuffle_buffer_size": 4096,
+  "num_parallel_calls": -1,
+  "cache_train": false,
+  "cache_eval": true,
+  "prefetch": true,
+  "augmentation_enabled": true,
+  "augmentation_padding": 4,
+  "augmentation_horizontal_flip": true
+}
