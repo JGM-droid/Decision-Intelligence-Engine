@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "tracking_dir": "mlruns",
+  "experiment_name": "decision_intelligence_engine",
+  "run_name_prefix": "mobilenetv2_frozen_baseline",
+  "tags": {
+    "project": "Decision Intelligence Engine",
+    "phase": "4A",
+    "baseline": "corrected_frozen_mobilenetv2"
+  }
+}

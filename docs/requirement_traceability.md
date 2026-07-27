@@ -14,11 +14,11 @@
 | Data and model | at least 3 appropriate evaluation metrics per model | Yes | Not Started | TBD | |
 | Data and model | reasonable model performance | Yes | Not Started | TBD | |
 | Data and model | best model selected and justified | Yes | Not Started | TBD | |
-| MLflow | MLflow integrated into training workflow | Yes | Not Started | TBD | |
-| MLflow | every run logs all hyperparameters | Yes | Not Started | TBD | |
-| MLflow | every run logs data version or data description | Yes | Not Started | TBD | |
-| MLflow | every run logs all evaluation metrics | Yes | Not Started | TBD | |
-| MLflow | every run logs the trained model as an artifact | Yes | Not Started | TBD | |
+| MLflow | MLflow integrated into training workflow | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Local MLflow tracking added for the corrected baseline. |
+| MLflow | every run logs all hyperparameters | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Hyperparameters, data config, and baseline settings are logged. |
+| MLflow | every run logs data version or data description | Yes | Completed | [configs/mlflow.json](configs/mlflow.json) | Run metadata includes the canonical data layout and split strategy. |
+| MLflow | every run logs all evaluation metrics | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Train, validation, test, and history metrics are logged. |
+| MLflow | every run logs the trained model as an artifact | Yes | Completed | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) | Keras model, reports, and diagnostic plots are logged. |
 | MLflow | at least 5 meaningfully different experiment runs | Yes | Not Started | TBD | |
 | MLflow | mlflow.search_runs() used | Yes | Not Started | TBD | |
 | MLflow | best run identified programmatically | Yes | Not Started | TBD | |

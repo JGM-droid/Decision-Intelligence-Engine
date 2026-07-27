@@ -1,51 +1,53 @@
 # Decision Intelligence Engine
 
-This repository is the initial setup for a focused intelligent application that will combine a trained machine learning model with an LLM-powered natural-language interface.
-
-**Intended status:** Initial repository setup.
-
-The final problem, dataset, prediction target, model architecture, LLM provider, and interface framework have not yet been selected.
+Decision Intelligence Engine is a computer-vision decision-support project built around CIFAR-10 image classification. The current workstream uses a deterministic data pipeline, a corrected frozen MobileNetV2 baseline, and local MLflow tracking to keep the training workflow reproducible and reviewable.
 
 ## Project Description
 
-_Placeholder for final project scope and objectives._
+The project classifies CIFAR-10 images and will later surface those predictions through a focused user-facing interface with explanation support. Phase 4A adds MLflow around the corrected baseline so each run captures parameters, metrics, artifacts, and experiment metadata.
 
 ## Intended Users and Problem
 
-_Placeholder for intended users and the specific decision-support problem._
+The project is intended for reviewers and future end users who need a simple image-classification assistant with traceable training evidence. The immediate problem is not a consumer chatbot; it is reproducible model training and experiment tracking for a narrow vision task.
 
 ## Dataset
 
-_Placeholder for data source, schema, and acquisition notes._
+The canonical dataset layout is `data/raw/cifar10/train/<class>/*.png` and `data/raw/cifar10/test/<class>/*.png`. Training, validation, and test splits are derived deterministically from the training tree, while the official test tree remains untouched.
 
 ## Setup
 
-_Placeholder for environment setup and installation instructions._
+Install the pinned dependencies from `requirements.txt` into the project virtual environment and ensure TensorFlow can see the local CIFAR-10 files. MLflow writes to the local `mlruns/` directory, which is ignored by Git.
 
 ## API-Key Configuration
 
-_Placeholder for secure API-key setup instructions after provider selection._
+Not applicable for the current phase. No LLM provider is wired in yet, and no API keys are required for the baseline or MLflow workflow.
 
 ## Usage
 
-_Placeholder for training, inference, and interface usage instructions._
+Run the baseline workflow with the project interpreter, for example:
+
+```bash
+python -m src.decision_intelligence_engine.baseline_training
+```
+
+The command trains the corrected frozen baseline, writes local model and report artifacts, and creates one MLflow run for the execution.
 
 ## Architecture
 
-_Placeholder for system architecture and component interactions._
+The system is organized around three layers: data pipeline, model training/evaluation, and experiment tracking. The current architecture keeps preprocessing in shared code, uses a frozen MobileNetV2 control baseline, and records each run through MLflow for later comparison.
 
 ## Model Results
 
-_Placeholder for evaluation metrics and best-model justification._
+The corrected frozen baseline currently serves as the reference run. It is intentionally short and under-trained, but it now produces aligned train/validation/test metrics and logs the model, confusion matrix, classification report, and training-history plots to MLflow.
 
 ## Limitations
 
-_Placeholder for known limitations, assumptions, and risks._
+The project does not yet include the LLM interface or Streamlit app, and the baseline is not tuned for final accuracy. MLflow comparison work still needs multiple distinct runs before model selection can begin.
 
 ## Reflection
 
-_Placeholder for project reflection and lessons learned._
+The main lesson so far is that reproducible file-manifest splitting and serialization-safe preprocessing matter more than a quick baseline score. Local experiment tracking is now in place so later model iterations can be compared cleanly.
 
 ## Demo
 
-_Placeholder for end-to-end demonstration notes and links._
+The current demonstration is the baseline training command plus the local MLflow UI. Start the UI with `mlflow ui --backend-store-uri file:./mlruns` after at least one run has completed.

@@ -25,6 +25,8 @@
 
 - Integrate MLflow into all training runs.
 - Log parameters, metrics, artifacts, and dataset metadata for every run.
+- Phase 4A complete: corrected frozen MobileNetV2 baseline now writes one local MLflow run per execution.
+- Baseline runs log hyperparameters, data description, evaluation metrics, model artifacts, and training plots.
 - Execute at least 5 meaningfully different experiment runs.
 - Build run-comparison workflow and rank experiments.
 
