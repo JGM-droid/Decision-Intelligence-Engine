@@ -114,7 +114,7 @@ def test_successful_mocked_openai_responses_call() -> None:
 def test_missing_api_key_behavior(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     explainer = OpenAIExplainer()
-    with pytest.raises(OpenAIExplanationError):
+    with pytest.raises(OpenAIExplanationError, match="OPENAI_API_KEY is not set"):
         explainer.explain(_prediction(), None)
 
 

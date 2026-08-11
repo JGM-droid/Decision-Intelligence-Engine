@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 
 import pytest
 
-from src.decision_intelligence_engine.explain_image import main
+from src.decision_intelligence_engine.explain_image import _load_local_environment, main
 from src.decision_intelligence_engine.model_inference import PredictionResult, TopPrediction
 
 
@@ -48,6 +49,34 @@ class FakeExplainer:
 
     def explain(self, prediction: PredictionResult, question: str | None, top_k: int = 3) -> str:
         return "This looks like a cat, but the model may still be wrong."
+
+
+def test_load_local_environment_reads_dotenv_when_variables_are_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dotenv_path = tmp_path / ".env"
+    dotenv_path.write_text("OPENAI_API_KEY=from-dotenv\nOPENAI_MODEL=dotenv-model\n", encoding="utf-8")
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+
+    _load_local_environment(tmp_path)
+
+    assert os.getenv("OPENAI_API_KEY") == "from-dotenv"
+    assert os.getenv("OPENAI_MODEL") == "dotenv-model"
+
+
+def test_load_local_environment_does_not_overwrite_existing_values(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    dotenv_path = tmp_path / ".env"
+    dotenv_path.write_text("OPENAI_API_KEY=from-dotenv\nOPENAI_MODEL=dotenv-model\n", encoding="utf-8")
+
+    monkeypatch.setenv("OPENAI_API_KEY", "from-existing")
+    monkeypatch.setenv("OPENAI_MODEL", "existing-model")
+
+    _load_local_environment(tmp_path)
+
+    assert os.getenv("OPENAI_API_KEY") == "from-existing"
+    assert os.getenv("OPENAI_MODEL") == "existing-model"
 
 
 def test_cli_classifier_only_mode(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

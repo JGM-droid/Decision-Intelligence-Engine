@@ -20,6 +20,20 @@ def _format_predictions(service_output, top_k: int) -> str:
     return "\n".join(lines)
 
 
+def _load_local_environment(project_root: Path | None = None) -> None:
+    root = project_root or Path(__file__).resolve().parents[2]
+    env_path = root / ".env"
+    if not env_path.exists():
+        return
+
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    load_dotenv(dotenv_path=env_path, override=False)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run CIFAR-10 classification and optional OpenAI explanation")
     parser.add_argument("--image", required=True, help="Path to the input image")
@@ -31,6 +45,7 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parents[2]
+    _load_local_environment(project_root)
     try:
         if args.top_k <= 0:
             raise ValueError("top_k must be between 1 and 10")
