@@ -14,13 +14,15 @@ What the project does:
 - preserves a deterministic train/validation/test split
 - supports classifier-only verification with no API key
 
+## 🎥 Project Demo
+
+[Watch the Decision Intelligence Engine Capstone Demo](https://youtu.be/9S8HbCtBMCs)
+
+This video demonstrates the trained ML model, natural-language/LLM interaction, MLflow experiment tracking, edge-case handling, and automated tests.
+
 ## Status
 
 Phase 5B is functionally complete. The repository is now focused on release readiness, portfolio polish, and documentation clarity rather than new ML features.
-
-## Intended Users
-
-The primary audience is a recruiter, reviewer, or engineer who wants to see a disciplined ML project with clear evidence, a working CLI, and concise documentation. The project is intentionally narrow so the engineering quality is easy to inspect.
 
 ## Architecture
 
