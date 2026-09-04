@@ -205,13 +205,13 @@ The final architecture choice is EfficientNetB0 at 96x96 resolution. The support
 
 ## MLflow Experiment Evidence
 
-The tracked experiment `decision_intelligence_engine` (id `320350008725726199`) under `mlruns/` contains 9 FINISHED runs covering 7 meaningfully different configurations, exceeding the requirement of at least 5 meaningful experiment runs:
+The tracked experiment `decision_intelligence_engine` (id `320350008725726199`) under `mlruns/` contains 9 FINISHED runs covering 7 meaningfully different configurations, exceeding the requirement of at least 5 meaningful experiment runs. The full table with real run IDs, configurations, metrics, and FINISHED statuses is in [docs/mlflow_tracking.md](docs/mlflow_tracking.md#run-evidence):
 
-- 5 controlled Phase 4B MobileNetV2 variants, listed with run IDs and test macro precision/recall/F1 in [reports/model_comparison.md](reports/model_comparison.md)
-- 1 MobileNetV2 96x96 resolution-control run and 1 EfficientNetB0 96x96 run, listed with run IDs and macro metrics in [reports/architecture_comparison.md](reports/architecture_comparison.md) (the selected EfficientNetB0 run is `c6170c6a38b74c869ffef74892644f42`)
+- 5 controlled Phase 4B MobileNetV2 variants (run IDs + macro metrics in the tracked evidence table)
+- 1 MobileNetV2 96x96 resolution-control run and 1 EfficientNetB0 96x96 run (the selected EfficientNetB0 run is `c6170c6a38b74c869ffef74892644f42`)
 - 2 early Phase 4A baseline runs retained for audit history
 
-3 interrupted KILLED runs also remain in the local store; they are not counted as experiment evidence.
+3 interrupted KILLED runs also remain in the local store; they are not counted as experiment evidence. Narrative context: [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md) and [docs/architecture_comparison.md](docs/architecture_comparison.md).
 
 All evidence is regenerated from the authoritative MLflow store with:
 

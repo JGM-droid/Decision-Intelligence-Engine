@@ -112,11 +112,13 @@ The original two-run comparison was not architecture-only because input resoluti
 
 ## Outputs
 
-The architecture comparison is generated from MLflow data and written to:
+The architecture comparison is generated from MLflow data and written to local (gitignored) report files:
 
 - reports/architecture_comparison.csv
 - reports/architecture_comparison.json
 - reports/architecture_comparison.md
+
+These are regenerated locally from the authoritative MLflow store and are not committed; the tracked per-run evidence, including run IDs and macro metrics, is in [docs/mlflow_tracking.md](mlflow_tracking.md#run-evidence).
 
 Decision output CLI:
 
