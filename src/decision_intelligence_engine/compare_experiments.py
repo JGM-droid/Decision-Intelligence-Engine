@@ -60,6 +60,9 @@ class ComparisonRow:
     train_accuracy: float | None
     validation_accuracy: float | None
     test_accuracy: float | None
+    test_macro_precision: float | None
+    test_macro_recall: float | None
+    test_macro_f1: float | None
     train_loss: float | None
     validation_loss: float | None
     test_loss: float | None
@@ -271,6 +274,11 @@ def _row_from_run(client: MlflowClient, run: Run, approved_ids: set[str]) -> Com
     train_acc = _safe_float(metrics.get("eval.train_accuracy"))
     val_acc = _safe_float(metrics.get("eval.val_accuracy"))
 
+    try:
+        test_metrics = _load_test_macro_metrics(run, artifact_paths)
+    except ValueError:
+        test_metrics = None
+
     notes = failures + warnings
     quality = "PASS" if not failures else "FAIL"
 
@@ -294,6 +302,9 @@ def _row_from_run(client: MlflowClient, run: Run, approved_ids: set[str]) -> Com
         train_accuracy=train_acc,
         validation_accuracy=val_acc,
         test_accuracy=_safe_float(metrics.get("eval.test_accuracy")),
+        test_macro_precision=None if test_metrics is None else test_metrics[1],
+        test_macro_recall=None if test_metrics is None else test_metrics[2],
+        test_macro_f1=None if test_metrics is None else test_metrics[3],
         train_loss=_safe_float(metrics.get("eval.train_loss")),
         validation_loss=_safe_float(metrics.get("eval.val_loss")),
         test_loss=_safe_float(metrics.get("eval.test_loss")),
@@ -369,6 +380,12 @@ def compare_phase4b_runs(project_root: Path) -> dict[str, Any]:
         "best_overall": ranked[0].experiment_id if ranked else None,
     }
 
+    row_dicts = []
+    for row in rows:
+        row_dict = dict(row.__dict__)
+        row_dict["selected"] = "yes" if row.experiment_id == winners["best_overall"] else "no"
+        row_dicts.append(row_dict)
+
     return {
         "tracking_uri": tracking_uri,
         "experiment_name": mlflow_cfg.experiment_name,
@@ -377,7 +394,7 @@ def compare_phase4b_runs(project_root: Path) -> dict[str, Any]:
         "required_experiment_ids": sorted(approved_ids, key=lambda exp_id: order_by_id[exp_id]),
         "missing_experiment_ids": missing,
         "duplicate_experiment_ids": duplicates,
-        "rows": [row.__dict__ for row in rows],
+        "rows": row_dicts,
         "ranked_eligible_experiment_ids": [row.experiment_id for row in ranked],
         "winners": winners,
     }
@@ -730,13 +747,15 @@ def _write_reports(project_root: Path, payload: dict[str, Any]) -> dict[str, str
         f"- Experiment: {payload['experiment_name']} ({payload['experiment_id']})",
         f"- Tracking URI: {payload['tracking_uri']}",
         f"- Best overall: {payload['winners']['best_overall']}",
+        "- Macro precision/recall/F1 are post-hoc calculations from the saved test confusion matrices, not original MLflow logged metrics.",
+        "- Selected marks the run carried into the Phase 5A architecture comparison; the final selected model is decided in the architecture comparison report.",
         "",
-        "| Experiment ID | Category | Changed Variable | Val Acc | Val Loss | Test Acc | Duration Sec | Eligibility | Notes |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Experiment ID | Run ID | Category | Changed Variable | Val Acc | Val Loss | Test Acc | Macro Precision | Macro Recall | Macro F1 | Duration Sec | Eligibility | Selected | Notes |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
     ]
     for row in rows:
         md_lines.append(
-            "| {experiment_id} | {experiment_category} | {changed_variable} | {validation_accuracy} | {validation_loss} | {test_accuracy} | {duration_sec} | {selection_eligibility} | {notes} |".format(
+            "| {experiment_id} | {run_id} | {experiment_category} | {changed_variable} | {validation_accuracy} | {validation_loss} | {test_accuracy} | {test_macro_precision} | {test_macro_recall} | {test_macro_f1} | {duration_sec} | {selection_eligibility} | {selected} | {notes} |".format(
                 **row
             )
         )

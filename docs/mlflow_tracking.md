@@ -45,6 +45,17 @@ Phase 4A, Phase 4B, and Phase 5A are complete:
 - one EfficientNetB0 96x96 architecture-comparison run executed through the same shared pipeline
 - MLflow search-based comparison and deterministic selection implemented
 
+## Run Evidence
+
+The tracked experiment contains 9 FINISHED runs covering 7 distinct configurations, which exceeds the requirement of at least 5 meaningful experiment runs. Three interrupted KILLED runs remain in the local store and are not counted as evidence.
+
+Reviewer-verifiable evidence with run IDs, hyperparameters, validation/test accuracy, and post-hoc test macro precision/recall/F1:
+
+- Phase 4B MobileNetV2 variants: [reports/model_comparison.md](../reports/model_comparison.md)
+- Phase 5A architecture comparison (including the selected EfficientNetB0 run): [reports/architecture_comparison.md](../reports/architecture_comparison.md)
+
+Both reports are regenerated from the authoritative MLflow store with the commands below.
+
 Comparison tooling:
 
 - `python -m src.decision_intelligence_engine.compare_experiments --write-reports`

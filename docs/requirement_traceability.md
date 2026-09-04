@@ -27,17 +27,17 @@ Status labels used in this ledger:
 | --- | --- | --- | --- |
 | Integrate MLflow into training workflow. | COMPLETE | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py), [docs/mlflow_tracking.md](docs/mlflow_tracking.md) | None. |
 | Each run must log hyperparameters, data version/description, metrics, and trained model artifact. | COMPLETE | [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py), [docs/mlflow_tracking.md](docs/mlflow_tracking.md) | None. |
-| Log at least 5 meaningfully different experiment runs. | COMPLETE | [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md), [reports/model_comparison.json](reports/model_comparison.json) | None. |
+| Log at least 5 meaningfully different experiment runs. | COMPLETE | 9 FINISHED runs across 7 configurations in the tracked experiment; [docs/mobilenetv2_experiments.md](docs/mobilenetv2_experiments.md), [reports/model_comparison.md](reports/model_comparison.md) (run IDs + macro metrics), [reports/architecture_comparison.md](reports/architecture_comparison.md) | None. |
 | Use mlflow.search_runs() to compare runs and identify best run programmatically. | COMPLETE | [src/decision_intelligence_engine/compare_experiments.py](src/decision_intelligence_engine/compare_experiments.py), [src/decision_intelligence_engine/select_experiment.py](src/decision_intelligence_engine/select_experiment.py) | None. |
 
 ## LLM Interface
 
 | Exact Requirement | Status | Implementation / Evidence | Remaining Action |
 | --- | --- | --- | --- |
-| Interface must accept user-uploaded images and user questions about predictions. | COMPLETE | [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py), [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py) | None. |
+| Interface must accept user-uploaded images and user questions about predictions. | COMPLETE | [src/decision_intelligence_engine/ask.py](src/decision_intelligence_engine/ask.py) (natural-language-first), [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) (image-first), [tests/test_ask_cli.py](tests/test_ask_cli.py), [tests/test_explain_image_cli.py](tests/test_explain_image_cli.py) | None. |
 | Interface must load and call the actual selected trained CNN model. | COMPLETE | [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) | None. |
-| Response must include predicted class, confidence context, explanation, and caveats. | COMPLETE | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py), [README.md](README.md) | None. |
-| Handle invalid uploads, ambiguous/low-confidence predictions, and out-of-scope prompts gracefully. | COMPLETE | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py), [tests/test_llm_explainer.py](tests/test_llm_explainer.py) | None. |
+| Response must include predicted class, confidence context, explanation, and caveats. | COMPLETE | [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py), [src/decision_intelligence_engine/ask.py](src/decision_intelligence_engine/ask.py), [README.md](README.md) | None. |
+| Handle invalid uploads, ambiguous/low-confidence predictions, and out-of-scope prompts gracefully. | COMPLETE | Deterministic pre-inference routing in [src/decision_intelligence_engine/request_parser.py](src/decision_intelligence_engine/request_parser.py); unsupported/ambiguous/missing-image requests terminate before any model or OpenAI call; [tests/test_request_parser.py](tests/test_request_parser.py), [tests/test_ask_cli.py](tests/test_ask_cli.py) | None. |
 | API keys must be stored via environment variables; no hardcoded secrets. | COMPLETE | [README.md](README.md), [.env.example](.env.example), [.gitignore](.gitignore) | None. |
 
 ## Testing

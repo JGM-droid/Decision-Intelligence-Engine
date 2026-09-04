@@ -22,9 +22,11 @@ The system has two tightly coupled layers:
 
 Phase 5B keeps these layers separate in code:
 
+- request_parser.py: deterministic natural-language request parsing into a structured ParsedRequest (no LLM involved in parsing)
 - model_inference.py: artifact resolution, image validation, preprocessing, and EfficientNetB0 inference
 - llm_explainer.py: prompt construction and OpenAI Responses API interaction
-- explain_image.py: CLI orchestration only
+- ask.py: natural-language-first CLI orchestration (parse -> validate -> classify -> optional explain)
+- explain_image.py: original image-first CLI orchestration only, unchanged
 
 Current selected predictive model:
 
@@ -62,6 +64,26 @@ flowchart LR
     G --> H
 ```
 
+### Natural-Language Request Routing
+
+```mermaid
+flowchart LR
+    A[Natural-language question] --> B[request_parser.parse_request]
+    B --> C[ParsedRequest]
+    C --> D{Validation / routing}
+    D -->|unsupported| E[Clear out-of-scope response]
+    D -->|ambiguous| F[Clarification request]
+    D -->|classify + no image| G[Image-required error]
+    D -->|classify + image| H[ModelInferenceService]
+    H --> I[PredictionResult]
+    I --> J[Deterministic answer]
+    I --> K[Optional OpenAIExplainer]
+    J --> L[CLI output]
+    K --> L
+```
+
+Unsupported, ambiguous, and missing-image requests terminate before any model loading and before any OpenAI request. Parsing is deterministic; the LLM never performs routing or intent extraction.
+
 ### MLflow Artifact Resolution
 
 ```mermaid
@@ -76,12 +98,12 @@ flowchart LR
 
 ## User Workflow
 
-1. User runs the CLI with an image path and optional natural-language question.
-2. System validates image format and applies inference preprocessing.
-3. CNN model returns class probabilities and a top prediction.
-4. Explanation context is assembled from the prediction, confidence, and top-k alternatives.
-5. LLM generates a concise natural-language explanation.
-6. CLI prints prediction, confidence, and explanation.
+1. User asks a natural-language question, optionally with an image path (`ask.py`), or runs the image-first CLI directly (`explain_image.py`).
+2. The deterministic parser converts the request into a structured `ParsedRequest` with an intent, optional CIFAR-10 target class, and image requirement.
+3. Unsupported and ambiguous requests are rejected with clear messages before any model or LLM call.
+4. Valid classification requests load the selected model, validate the image, and run inference.
+5. A deterministic answer is built from the prediction and confidence; target-class questions are answered with classifier semantics (predicted class and confidence, never object-detection absence claims).
+6. When enabled, the LLM explains the prediction with caveats.
 7. If input is invalid or out of scope, the CLI returns a clear error or a safe fallback.
 
 ## Data Flow

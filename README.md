@@ -8,6 +8,7 @@ This repository is designed to read like a release candidate: experiments are re
 
 What the project does:
 
+- accepts natural-language questions and parses them deterministically into structured requests
 - classifies CIFAR-10 images with a frozen EfficientNetB0 model
 - explains classifier output with the OpenAI Responses API
 - records experiments and artifacts in MLflow
@@ -30,12 +31,66 @@ The current architecture is documented in [docs/architecture.md](docs/architectu
 
 - data ingestion and preprocessing are deterministic
 - model training and experiment tracking happen through the shared TensorFlow/MLflow pipeline
+- natural-language requests are parsed deterministically before any model or LLM call
 - inference resolves the selected EfficientNetB0 artifact from MLflow evidence
-- OpenAI is only used to explain classifier output, not to make the prediction
+- OpenAI is only used to explain classifier output, not to make the prediction and not to parse requests
+
+## Natural-Language Interface
+
+The natural-language-first CLI is [src/decision_intelligence_engine/ask.py](src/decision_intelligence_engine/ask.py). The flow is:
+
+```text
+Natural-language request
+        ↓
+Deterministic request parser (request_parser.py, no LLM)
+        ↓
+Structured ParsedRequest (intent, target_class, requires_image)
+        ↓
+Validation / routing
+        ↓
+Image classifier, only when a valid classification request supplies an image
+        ↓
+PredictionResult (predicted class + confidence)
+        ↓
+Optional LLM explanation (skipped with --no-llm)
+        ↓
+User-facing response
+```
+
+The parser is deterministic and conservative. It never invents an intent: clearly out-of-scope requests are rejected, vague requests are reported as ambiguous, and only requests that match this application's CIFAR-10 classification capability reach the classifier. Unsupported, ambiguous, and missing-image requests terminate before any model loading and before any OpenAI call.
+
+Demo commands:
+
+```bash
+# A. Normal natural-language classification request
+python -m src.decision_intelligence_engine.ask --question "What is shown in this image?" --image docs/assets/cifar10_samples/frog_sample_1.png
+
+# B. CIFAR-10 target-class question (answered from classifier semantics, not object detection)
+python -m src.decision_intelligence_engine.ask --question "Does this image contain a frog?" --image docs/assets/cifar10_samples/frog_sample_1.png
+
+# C. Missing-image request (clear error, no model or OpenAI call)
+python -m src.decision_intelligence_engine.ask --question "What is shown in this image?"
+
+# D. Out-of-scope request (rejected before any model or OpenAI call)
+python -m src.decision_intelligence_engine.ask --question "What will the weather be tomorrow?"
+
+# E. Classifier-only mode without OpenAI
+python -m src.decision_intelligence_engine.ask --question "What is shown in this image?" --image docs/assets/cifar10_samples/frog_sample_1.png --no-llm
+
+# F. Automated test suite
+python -m pytest tests -v
+
+# G. Regenerate MLflow experiment evidence
+python -m src.decision_intelligence_engine.compare_experiments --write-reports
+```
+
+The original image-first CLI ([src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py)) is unchanged and remains fully supported.
 
 ## Key Files
 
-- [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) - CLI entry point
+- [src/decision_intelligence_engine/ask.py](src/decision_intelligence_engine/ask.py) - natural-language-first CLI entry point
+- [src/decision_intelligence_engine/request_parser.py](src/decision_intelligence_engine/request_parser.py) - deterministic request parser
+- [src/decision_intelligence_engine/explain_image.py](src/decision_intelligence_engine/explain_image.py) - original image-first CLI entry point
 - [src/decision_intelligence_engine/model_inference.py](src/decision_intelligence_engine/model_inference.py) - model resolution and prediction
 - [src/decision_intelligence_engine/llm_explainer.py](src/decision_intelligence_engine/llm_explainer.py) - OpenAI prompt and response handling
 - [src/decision_intelligence_engine/baseline_training.py](src/decision_intelligence_engine/baseline_training.py) - shared training pipeline
@@ -92,6 +147,8 @@ python -m src.decision_intelligence_engine.compare_experiments --write-reports
 python -m src.decision_intelligence_engine.select_experiment
 python -m src.decision_intelligence_engine.compare_experiments --architecture --write-architecture-reports
 python -m src.decision_intelligence_engine.select_architecture
+python -m src.decision_intelligence_engine.ask --question "What is shown in this image?" --image path/to/image.png
+python -m src.decision_intelligence_engine.ask --question "Does this image contain a frog?" --image path/to/image.png --no-llm
 python -m src.decision_intelligence_engine.explain_image --image path/to/image.png --no-llm
 python -m src.decision_intelligence_engine.explain_image --image path/to/image.png --question "What is shown here?"
 ```
@@ -145,6 +202,23 @@ Potential follow-up items that would materially improve the portfolio later:
 ## Model Results
 
 The final architecture choice is EfficientNetB0 at 96x96 resolution. The supporting comparison and MLflow evidence are summarized in [docs/architecture_comparison.md](docs/architecture_comparison.md).
+
+## MLflow Experiment Evidence
+
+The tracked experiment `decision_intelligence_engine` (id `320350008725726199`) under `mlruns/` contains 9 FINISHED runs covering 7 meaningfully different configurations, exceeding the requirement of at least 5 meaningful experiment runs:
+
+- 5 controlled Phase 4B MobileNetV2 variants, listed with run IDs and test macro precision/recall/F1 in [reports/model_comparison.md](reports/model_comparison.md)
+- 1 MobileNetV2 96x96 resolution-control run and 1 EfficientNetB0 96x96 run, listed with run IDs and macro metrics in [reports/architecture_comparison.md](reports/architecture_comparison.md) (the selected EfficientNetB0 run is `c6170c6a38b74c869ffef74892644f42`)
+- 2 early Phase 4A baseline runs retained for audit history
+
+3 interrupted KILLED runs also remain in the local store; they are not counted as experiment evidence.
+
+All evidence is regenerated from the authoritative MLflow store with:
+
+```bash
+python -m src.decision_intelligence_engine.compare_experiments --write-reports
+python -m src.decision_intelligence_engine.compare_experiments --architecture --write-architecture-reports
+```
 
 ## Limitations
 
